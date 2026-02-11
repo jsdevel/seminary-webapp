@@ -1,0 +1,1706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Seminary Local</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Seminary">
+
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<style>
+:root{
+  --ink:#0b1020;
+  --paper:#ffffff;
+  --line:#0b1020;
+  --soft:#f6f6f6;
+
+  --hi:#0b1020;
+  --next:#e8f0ff;
+  --warn:#ffecec;
+  --badgeOff:#ffe5e5;
+}
+
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  font-size:22px;
+  overflow:hidden; /* never scroll page */
+}
+
+.wrap{width:100%;height:100%;max-width:none;margin:0;padding:0}
+.hidden{display:none!important}
+
+/* ===== shared controls ===== */
+.card{
+  background:var(--paper);
+  border:3px solid var(--line);
+  border-radius:10px;
+  padding:10px;
+  box-sizing:border-box;
+  position:relative;
+}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+
+input,select{
+  padding:8px 10px;
+  border-radius:10px;
+  border:3px solid var(--line);
+  background:var(--paper);
+  color:var(--ink);
+  outline:none;
+  font-size:16px;
+}
+textarea{
+  border-radius:12px;
+  border:3px solid var(--line);
+  background:var(--paper);
+  color:var(--ink);
+  outline:none;
+  font-size:16px;
+}
+
+button{
+  padding:8px 12px;
+  border-radius:10px;
+  border:3px solid var(--line);
+  background:var(--paper);
+  color:var(--ink);
+  cursor:pointer;
+  user-select:none;
+  font-weight:900;
+  font-size:16px;
+}
+button:hover{background:#f2f2f2}
+.smallBtn{padding:6px 8px;font-size:14px}
+.danger{background:#ffe5e5;border-color:var(--line)}
+.ghost{background:var(--paper)}
+.status{margin-top:8px;font-size:14px;color:var(--ink)}
+.meta{font-size:14px;color:var(--ink)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+
+/* corner X (ALL at -10px,-10px) */
+.cornerX{
+  position:absolute;
+  top:-10px;
+  right:-10px;
+  padding:4px 8px;
+  border-radius:10px;
+  border:3px solid var(--line);
+  background:#ffe5e5;
+  color:var(--ink);
+  font-weight:950;
+  font-size:14px;
+  line-height:1;
+  z-index:3;
+}
+.cornerX:hover{background:#ffd7d7}
+
+/* ===== Sessions view (no page scroll) ===== */
+#viewSessions{height:100%}
+.gridSessions{
+  height:100%;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  padding:12px;
+  box-sizing:border-box;
+}
+.leftPane, .rightPane{height:100%;display:flex;flex-direction:column;gap:12px}
+.sessionsBox{
+  flex:1 1 auto;
+  overflow:auto; /* scroll only list */
+  border:3px solid var(--line);
+  border-radius:10px;
+  padding:10px;
+  box-sizing:border-box;
+}
+.sessionsBox::-webkit-scrollbar{width:14px}
+.sessionsBox::-webkit-scrollbar-thumb{background:#ddd;border:3px solid #fff;border-radius:999px}
+
+ul{list-style:none;padding:0;margin:0}
+.listItem{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px;
+  border-radius:10px;
+  border:3px solid var(--line);
+  margin-bottom:10px;
+  gap:10px;
+}
+.listItem .actions{display:flex;gap:8px;align-items:center;flex:0 0 auto}
+
+/* ===== Game fixed viewport grid ===== */
+#viewGame{height:100%}
+
+.topbar{
+  height:74px;
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  padding:12px;
+  box-sizing:border-box;
+}
+.topbarLeft{display:flex;flex-direction:column;gap:2px}
+.topbarLeft .title{font-size:18px;font-weight:950}
+.topbarLeft .meta{font-size:14px;color:var(--ink)}
+.topbarMid{flex:1;display:flex;justify-content:center;align-items:flex-start}
+.pointsBar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  justify-content:center;
+  align-items:center;
+  padding-top:2px;
+}
+.pointPill{
+  border:3px solid var(--line);
+  background:var(--paper);
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:16px;
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.pointPill .nm{font-weight:950}
+.pointPill .pts{font-weight:950}
+.topbarRight{display:flex;align-items:flex-start;gap:10px}
+
+.gameGrid{
+  height:calc(100% - 74px);
+  display:grid;
+  grid-template-columns: 380px 1fr 440px;
+  gap:12px;
+  padding:0 0 12px 0; /* flush edges */
+  box-sizing:border-box;
+}
+
+/* left/right cards flush to edges */
+.colLeft.card{border-left-width:0;border-top-left-radius:0;border-bottom-left-radius:0}
+.colRight.card{border-right-width:0;border-top-right-radius:0;border-bottom-right-radius:0}
+
+/* per-column internal layout (fixed top areas + scroll areas) */
+.colLeft.card, .colCenter, .colRight.card{height:100%;overflow:hidden}
+.colLeft{padding:0}
+.colRight{padding:0}
+.colLeftInner, .colRightInner{height:100%;display:flex;flex-direction:column;gap:10px;padding:10px;box-sizing:border-box}
+.colCenter{padding:0 10px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px}
+
+/* ===== LEFT: Teams (scroll only team list) ===== */
+.leftTop{flex:0 0 auto}
+.teamsScroll{
+  flex:1 1 auto;
+  overflow:visible;
+  padding-right:4px;
+}
+.teamsScroll::-webkit-scrollbar{width:14px}
+.teamsScroll::-webkit-scrollbar-thumb{background:#ddd;border:3px solid #fff;border-radius:999px}
+
+.teamCard{
+  background:var(--paper);
+  border:3px solid var(--line);
+  border-radius:10px;
+  padding:10px;
+  margin-bottom:10px;
+  position:relative;
+  box-sizing:border-box;
+}
+.teamHeader{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.pill{font-size:14px}
+.colLeftInner{font-size:16px}
+.colLeftInner input, .colLeftInner button { font-size:15px; }
+
+.membersGrid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:8px 10px;
+  margin-bottom:10px;
+}
+.memberRow{
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  padding:10px 10px;
+  border-radius:10px;
+  font-size:16px;
+  background:var(--paper);
+  border:2px solid var(--line);
+  gap:10px;
+  min-width:0;
+}
+.memberRow .nm{
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  line-height:1.15;
+  padding-right:24px;
+}
+.memberRow.current{background:var(--hi);color:#fff;border-color:var(--hi)}
+.memberRow.next{background:var(--next);border-color:var(--line)}
+.memberRow .cornerX{top:-10px;right:-10px;padding:2px 6px;font-size:12px}
+.teamCard.currentTeam{box-shadow:0 0 0 4px var(--line) inset}
+
+/* compact add-member row */
+.addMemberRow{ gap:6px; }
+.addMemberRow input{padding:6px 8px;border-radius:10px;font-size:13px}
+.addMemberRow button{padding:6px 8px;border-radius:10px;font-size:13px}
+
+/* ===== CENTER: fixed current category heading + scroll table ===== */
+.centerHeading{
+  flex:0 0 auto;
+  padding:10px 12px;
+  border:3px solid var(--line);
+  background:var(--paper);
+  border-radius:10px;
+}
+.centerHeading .kicker{font-size:14px;margin-bottom:4px}
+.centerHeading .cat{font-size:30px;font-weight:950;line-height:1.1}
+
+.tableWrap{
+  flex:1 1 auto;
+  border:3px solid var(--line);
+  background:var(--paper);
+  border-radius:10px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+.tableHead{
+  flex:0 0 auto;
+  padding:10px 12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  border-bottom:3px solid var(--line);
+}
+.tableHead .left{display:flex;flex-direction:column;gap:2px}
+.tableHead .title{font-size:16px;font-weight:950}
+.tableHead .sub{font-size:14px;color:var(--ink)}
+.tableHead .actions{display:flex;gap:8px;align-items:center}
+.tableBody{overflow:auto;flex:1}
+.tableBody::-webkit-scrollbar{width:14px}
+.tableBody::-webkit-scrollbar-thumb{background:#ddd;border:3px solid #fff;border-radius:999px}
+
+table{width:100%;border-collapse:collapse;font-size:18px;table-layout:fixed}
+th,td{padding:10px 12px;border-bottom:2px solid var(--line);vertical-align:top}
+th{background:var(--ink);color:#fff;font-size:14px;font-weight:950;text-align:left}
+tbody tr:hover{background:var(--soft)}
+td.small{white-space:nowrap;font-size:14px}
+td.wrapText{word-break:break-word}
+
+/* ===== RIGHT: fixed timer + add category + response entry; scroll only categories list ===== */
+.rightFixed{
+  flex:0 0 auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+/* timer box */
+.timerBox{
+  border:3px solid var(--line);
+  background:var(--paper);
+  border-radius:10px;
+  padding:12px 14px;
+}
+.timerBig{
+  font-size:84px;
+  font-weight:950;
+  letter-spacing:1px;
+  line-height:1;
+  text-align:right;
+}
+.timerSub{display:flex;flex-direction:column;gap:10px;margin-top:12px;font-size:14px}
+.timerRow{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.timerRow .label{flex:1;min-width:0}
+.timerRow input{padding:6px 8px;border-radius:10px;font-size:14px}
+.timerPaused{background:var(--warn)}
+
+/* categories */
+.sectionTitle{
+  font-size:16px;
+  margin:0;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.catsScroll{
+  flex:1 1 auto;
+  overflow:auto;
+  border:3px solid var(--line);
+  border-radius:10px;
+  padding:8px;
+  box-sizing:border-box;
+}
+.catsScroll::-webkit-scrollbar{width:14px}
+.catsScroll::-webkit-scrollbar-thumb{background:#ddd;border:3px solid #fff;border-radius:999px}
+.catGrid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px;
+}
+.catChip{
+  position:relative;
+  background:var(--paper);
+  border:3px solid var(--line);
+  border-radius:10px;
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-height:72px;
+}
+.catChip.active{background:var(--hi);color:#fff}
+.catTop{display:flex;gap:8px;align-items:flex-start;justify-content:space-between}
+.catName{
+  flex:1;min-width:0;
+  font-size:14px;
+  font-weight:950;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  line-height:1.15;
+  padding-right:34px;
+}
+.catBtns{display:flex;gap:6px;align-items:center}
+.catBtns button{padding:6px 8px;font-size:13px}
+
+/* plain checkbox (NO circle/pill around it) */
+.catBottom{display:flex;align-items:center;gap:8px}
+.catBottom input[type="checkbox"]{
+  width:18px;height:18px;
+  accent-color:var(--ink);
+}
+.catChip.active .catBottom input[type="checkbox"]{
+  accent-color:#fff;
+  filter:brightness(1.2) contrast(1.1);
+}
+
+/* badge bottom-right */
+.badgeBR{
+  position:absolute;
+  right:8px;
+  bottom:6px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:3px solid var(--line);
+  font-size:11px;
+  font-weight:950;
+  background:var(--paper);
+  color:var(--ink);
+}
+.catChip.active .badgeBR{background:#fff;color:#0b1020;border-color:#fff}
+.badgeBR.off{background:var(--badgeOff)}
+.badgeBR.on{background:var(--paper)}
+.badgeBR.active{background:#fff}
+
+/* response entry (fixed, not inside scroll) */
+.responseBox{
+  border:3px solid var(--line);
+  background:var(--paper);
+  border-radius:10px;
+  padding:12px;
+}
+.responseBox .hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.responseBox .who{font-size:16px;font-weight:950}
+.responseBox textarea{width:100%;min-height:120px;resize:vertical;padding:10px;box-sizing:border-box}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <!-- ========= SESSIONS ========= -->
+  <div id="viewSessions">
+    <div class="gridSessions">
+      <div class="leftPane">
+        <div class="card">
+          <div style="font-size:16px;margin-bottom:8px;font-weight:950;">New Session</div>
+          <input id="sessionDate" type="date"/>
+          <input id="sessionTitle" placeholder="Optional title" style="margin-top:8px"/>
+          <div class="row" style="margin-top:10px">
+            <button id="btnCreate">Create</button>
+            <button id="btnReset" class="ghost">Reset</button>
+          </div>
+          <div class="status">Creates a new session and copies teams/members from the most recent session (if any).</div>
+        </div>
+      </div>
+
+      <div class="rightPane">
+        <div class="card">
+          <div style="font-size:16px;margin-bottom:0;font-weight:950;">Sessions</div>
+          <div class="meta">Newest at top • List scrolls here (page never scrolls)</div>
+        </div>
+        <div class="sessionsBox">
+          <ul id="sessionList"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========= GAME ========= -->
+  <div id="viewGame" class="hidden">
+
+    <div class="topbar">
+      <div class="topbarLeft">
+        <div class="title" id="gameSessionTitle"></div>
+        <div class="meta" id="gameSessionMeta"></div>
+      </div>
+
+      <div class="topbarMid">
+        <div class="pointsBar" id="pointsBar"></div>
+      </div>
+
+      <div class="topbarRight">
+        <button id="btnBack" class="ghost">← Back</button>
+      </div>
+    </div>
+
+    <div class="gameGrid">
+
+      <!-- LEFT: teams (scroll only list) -->
+      <div class="card colLeft">
+        <div class="colLeftInner">
+          <div class="leftTop">
+            <div class="row">
+              <input id="newTeamName" placeholder="Team name"/>
+              <button id="btnAddTeam">Add</button>
+            </div>
+          </div>
+
+          <div id="teamsWrap" class="teamsScroll" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <!-- CENTER: current category fixed + table scroll -->
+      <div class="colCenter">
+        <div class="centerHeading">
+          <div class="kicker">Current category</div>
+          <div class="cat" id="currentCategoryHeading">—</div>
+        </div>
+
+        <div class="tableWrap">
+          <div class="tableHead">
+            <div class="left">
+              <div class="title">Responses (selected category)</div>
+              <div class="sub" id="respSummary">0 total</div>
+            </div>
+            <div class="actions">
+              <button id="btnClearResponses" class="danger smallBtn" title="Delete all responses">Clear</button>
+            </div>
+          </div>
+
+          <div class="tableBody">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:16%;">Team</th>
+                  <th style="width:18%;">Member</th>
+                  <th style="width:10%;">Ref</th>
+                  <th style="width:56%;">Response</th>
+                </tr>
+              </thead>
+              <tbody id="respTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: timer + add category + response fixed; categories scroll in middle -->
+      <div class="card colRight">
+        <div class="colRightInner">
+
+          <div class="rightFixed">
+            <div id="timerBox" class="timerBox hidden">
+              <div id="timerBig" class="timerBig">00:30</div>
+
+              <div class="timerSub">
+                <div class="timerRow">
+                  <div class="label">Turn seconds</div>
+                  <input id="turnSeconds" type="number" min="5" step="5" value="30" style="width:110px"/>
+                </div>
+
+                <div class="timerRow">
+                  <div class="label" id="refLabelText">Verse</div>
+                  <input id="refLabel" type="text" value="Verse" style="width:200px"/>
+                </div>
+
+                <div class="timerRow" title="Rounds per category: 1 means each team gets one turn before rotating.">
+                  <div class="label">Turns per category</div>
+                  <input id="turnsPerCategory" type="number" min="0" step="1" value="0" style="width:110px"/>
+                </div>
+
+                <div class="timerRow">
+                  <div class="label">Progress</div>
+                  <div class="mono" id="catProgress" style="text-align:right; min-width:140px;">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="sectionTitle">
+                <span>Categories</span>
+                <span id="catCount" class="meta"></span>
+              </div>
+
+              <div class="row" style="margin-top:6px;">
+                <input id="newCategoryName" placeholder="Add category"/>
+                <button id="btnAddCategory">Add</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="catsScroll" class="catsScroll">
+            <div id="catsWrap" class="catGrid"></div>
+          </div>
+
+          <div id="responseBox" class="responseBox hidden">
+            <div class="hdr">
+              <div class="who" id="responseWho"><span>Waiting…</span></div>
+              <div class="meta" id="responseCategory"></div>
+            </div>
+
+            <div class="row" style="margin-bottom:10px;">
+              <input id="refNumber" placeholder="e.g., 13" />
+            </div>
+
+            <textarea id="responseText" placeholder="Enter their response…"></textarea>
+
+            <div class="row" style="margin-top:10px;">
+              <button id="btnSubmitResponse">Submit (+1)</button>
+              <button id="btnSkipNoPoint" class="ghost" title="Advance without recording. No points.">Skip</button>
+            </div>
+
+            <div class="row" style="margin-top:10px;">
+              <button id="btnStopChallenge" class="ghost" title="Award 5 points to current team, disable this category, and rotate.">Stop (+5)</button>
+              <button id="btnPauseResume" class="ghost">Pause</button>
+            </div>
+
+            <div class="status">
+              Timer hits zero ⇒ paused. Game continues when you submit, skip, or stop.
+            </div>
+          </div>
+
+          <div class="status" id="rightHint">
+            Click a category to start. Timer + highlighting will appear.
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ========= state ========= */
+const KEY="seminary_app_v1";
+const qs=s=>document.querySelector(s);
+const load=()=>JSON.parse(localStorage.getItem(KEY)||'{"sessions":[],"active":null}');
+const save=s=>localStorage.setItem(KEY,JSON.stringify(s));
+const makeId=p=>p+"_"+Date.now()+"_"+Math.random().toString(16).slice(2);
+const today=()=>new Date().toISOString().slice(0,10);
+
+function escapeHtml(s){
+  return String(s??"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+function ensureRootShape(st){
+  if(!st || typeof st !== "object") st = {sessions:[],active:null};
+  if(!Array.isArray(st.sessions)) st.sessions = [];
+  if(!("active" in st)) st.active = null;
+  return st;
+}
+function ensureSessionShape(sess){
+  if(!Array.isArray(sess.teams)) sess.teams=[];
+  if(!Array.isArray(sess.categories)) sess.categories=[];
+
+  for(const t of sess.teams){
+    if(!Array.isArray(t.members)) t.members=[];
+    if(typeof t.points !== "number" || !isFinite(t.points)) t.points = 0;
+    if(typeof t.name !== "string") t.name = "Team";
+  }
+  for(const c of sess.categories){
+    if(typeof c.enabled !== "boolean") c.enabled = true;
+    if(typeof c.name !== "string") c.name = "Category";
+  }
+
+  if(!sess.settings || typeof sess.settings!=="object"){
+    sess.settings = { turnSeconds: 30, refLabel: "Verse", turnsPerCategory: 0 };
+  }
+  if(typeof sess.settings.turnSeconds !== "number" || !isFinite(sess.settings.turnSeconds)) sess.settings.turnSeconds = 30;
+  if(typeof sess.settings.refLabel !== "string") sess.settings.refLabel = "Verse";
+  if(typeof sess.settings.turnsPerCategory !== "number" || !isFinite(sess.settings.turnsPerCategory)) sess.settings.turnsPerCategory = 0;
+
+  if(!sess.play || typeof sess.play!=="object"){
+    sess.play = {
+      activeCategoryId: null,
+      currentTeamIndex: 0,
+      nextMemberIndexByTeamId: {},
+      paused: true,
+      categoryTurnsUsed: 0,
+      responses: []
+    };
+  }
+  if(!Array.isArray(sess.play.responses)) sess.play.responses = [];
+  if(typeof sess.play.currentTeamIndex !== "number") sess.play.currentTeamIndex = 0;
+  if(typeof sess.play.paused !== "boolean") sess.play.paused = true;
+  if(typeof sess.play.categoryTurnsUsed !== "number" || !isFinite(sess.play.categoryTurnsUsed)) sess.play.categoryTurnsUsed = 0;
+  if(!sess.play.nextMemberIndexByTeamId || typeof sess.play.nextMemberIndexByTeamId!=="object"){
+    sess.play.nextMemberIndexByTeamId = {};
+  }
+
+  for(const t of sess.teams){
+    if(!(t.id in sess.play.nextMemberIndexByTeamId)){
+      sess.play.nextMemberIndexByTeamId[t.id] = 0;
+    }
+  }
+  for(const k of Object.keys(sess.play.nextMemberIndexByTeamId)){
+    if(!sess.teams.some(t=>t.id===k)) delete sess.play.nextMemberIndexByTeamId[k];
+  }
+
+  if(sess.play.activeCategoryId && !sess.categories.some(c=>c.id===sess.play.activeCategoryId)){
+    sess.play.activeCategoryId = null;
+  }
+}
+function getActiveSession(state){
+  const sess = state.sessions.find(x=>x.id===state.active);
+  if(sess) ensureSessionShape(sess);
+  return sess || null;
+}
+
+/* ========= timer ========= */
+let timerInterval = null;
+let remainingMs = 0;
+
+function formatMMSS(ms){
+  const total = Math.max(0, Math.ceil(ms/1000));
+  const mm = String(Math.floor(total/60)).padStart(2,"0");
+  const ss = String(total%60).padStart(2,"0");
+  return `${mm}:${ss}`;
+}
+function stopTimer(){
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
+}
+function setTimerPausedUI(paused){
+  qs("#timerBox").classList.toggle("timerPaused", paused);
+  qs("#btnPauseResume").textContent = paused ? "Resume" : "Pause";
+}
+function startTurnTimer(state, sess){
+  stopTimer();
+  const seconds = Math.max(5, Number(sess.settings.turnSeconds) || 30);
+  remainingMs = seconds * 1000;
+
+  sess.play.paused = false;
+  save(state);
+
+  setTimerPausedUI(false);
+  qs("#timerBig").textContent = formatMMSS(remainingMs);
+
+  timerInterval = setInterval(()=>{
+    const st = ensureRootShape(load());
+    const s2 = getActiveSession(st);
+    if(!s2) { stopTimer(); return; }
+
+    if(s2.play.paused){
+      qs("#timerBig").textContent = formatMMSS(remainingMs);
+      return;
+    }
+
+    remainingMs -= 250;
+    if(remainingMs <= 0){
+      remainingMs = 0;
+      qs("#timerBig").textContent = "00:00";
+      s2.play.paused = true;
+      save(st);
+      setTimerPausedUI(true);
+      stopTimer();
+      renderGame();
+      return;
+    }
+    qs("#timerBig").textContent = formatMMSS(remainingMs);
+  }, 250);
+}
+
+/* ========= init ========= */
+{
+  const st = ensureRootShape(load());
+  save(st);
+}
+qs("#sessionDate").value=today();
+renderSessions();
+
+/* ========= session creation (copies previous teams/members) ========= */
+qs("#btnCreate").onclick=()=>{
+  const state=ensureRootShape(load());
+  const date=qs("#sessionDate").value || today();
+  const title=qs("#sessionTitle").value || "Untitled";
+
+  const existing = [...state.sessions];
+  existing.sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")) || String(b.id).localeCompare(String(a.id)));
+  const prev = existing[0] || null;
+
+  const teams = (prev?.teams || []).map(t=>{
+    const newTeamId = makeId("team");
+    return {
+      id:newTeamId,
+      name: t.name || "Team",
+      points: 0,
+      members: (t.members||[]).map(m=>({ id: makeId("m"), name: m.name || "" }))
+    };
+  });
+
+  const nextMemberIndexByTeamId = {};
+  for(const t of teams) nextMemberIndexByTeamId[t.id] = 0;
+
+  state.sessions.push({
+    id:makeId("sess"),
+    date,
+    title,
+    teams,
+    categories:[],
+    settings:{turnSeconds:30, refLabel:"Verse", turnsPerCategory:0},
+    play:{activeCategoryId:null,currentTeamIndex:0,nextMemberIndexByTeamId,paused:true,categoryTurnsUsed:0,responses:[]}
+  });
+
+  save(state);
+  renderSessions();
+};
+qs("#btnReset").onclick=()=>{ qs("#sessionTitle").value=""; };
+
+function renderSessions(){
+  const state=ensureRootShape(load());
+  const ul=qs("#sessionList");
+  ul.innerHTML="";
+
+  const sessions = [...state.sessions].sort((a,b)=>{
+    const d = String(b.date||"").localeCompare(String(a.date||""));
+    if(d!==0) return d;
+    return String(b.id).localeCompare(String(a.id));
+  });
+
+  sessions.forEach(sess=>{
+    const li=document.createElement("li");
+    li.className="listItem";
+
+    const left=document.createElement("div");
+    left.innerHTML=`
+      <div style="font-weight:950">${escapeHtml(sess.title)}</div>
+      <div class="meta">${escapeHtml(sess.date || "")}</div>
+    `;
+
+    const actions=document.createElement("div");
+    actions.className="actions";
+
+    const open=document.createElement("button");
+    open.textContent="Open";
+    open.onclick=()=>openSession(sess.id);
+
+    const print=document.createElement("button");
+    print.textContent="Print";
+    print.className="ghost";
+    print.title="Print report for this session";
+    print.onclick=()=>printSessionReport(sess.id);
+
+    const del=document.createElement("button");
+    del.textContent="Delete";
+    del.className="danger";
+    del.title="Delete this session";
+    del.onclick=()=>{
+      if(!confirm(`Delete session "${sess.title}"? This cannot be undone.`)) return;
+
+      const st = ensureRootShape(load());
+      st.sessions = st.sessions.filter(s => s.id !== sess.id);
+
+      // if deleting the active session, clear active
+      if(st.active === sess.id) st.active = null;
+
+      save(st);
+      renderSessions();
+    };
+
+    actions.appendChild(open);
+    actions.appendChild(print);
+    actions.appendChild(del);
+
+    li.appendChild(left);
+    li.appendChild(actions);
+    ul.appendChild(li);
+  });
+}
+
+function openSession(id){
+  const state=ensureRootShape(load());
+  state.active=id;
+  const sess=getActiveSession(state);
+  save(state);
+
+  qs("#viewSessions").classList.add("hidden");
+  qs("#viewGame").classList.remove("hidden");
+
+  renderGame();
+
+  if(sess && sess.play.activeCategoryId && !sess.play.paused){
+    qs("#timerBox").classList.remove("hidden");
+    startTurnTimer(state, sess);
+  }
+}
+
+qs("#btnBack").onclick=()=>{
+  stopTimer();
+  qs("#viewGame").classList.add("hidden");
+  qs("#viewSessions").classList.remove("hidden");
+  renderSessions();
+};
+
+/* ========= report printing ========= */
+function printSessionReport(sessionId){
+  const state = ensureRootShape(load());
+  const sess = state.sessions.find(s=>s.id===sessionId);
+  if(!sess) return;
+  ensureSessionShape(sess);
+
+  const teamById = new Map(sess.teams.map(t=>[t.id,t]));
+  const catById = new Map(sess.categories.map(c=>[c.id,c]));
+  const resp = Array.isArray(sess.play?.responses) ? sess.play.responses : [];
+
+  const catAgg = new Map();
+  for(const r of resp){
+    const catName = catById.get(r.categoryId)?.name ?? "(Deleted category)";
+    const teamName = teamById.get(r.teamId)?.name ?? "(Deleted team)";
+    const memberName = (teamById.get(r.teamId)?.members || []).find(m=>m.id===r.memberId)?.name ?? "(Deleted member)";
+
+    if(!catAgg.has(catName)) catAgg.set(catName, new Map());
+    const tmap = catAgg.get(catName);
+    if(!tmap.has(teamName)) tmap.set(teamName, []);
+    tmap.get(teamName).push({
+      memberName,
+      ref: `${(r.refLabel||"Ref")} ${r.refNumber||""}`.trim(),
+      text: r.text || ""
+    });
+  }
+
+  const sortedTeams = [...sess.teams].slice().sort((a,b)=>(b.points||0)-(a.points||0));
+  const sortedCats = [...sess.categories].slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
+  const totalResponses = resp.length;
+
+  const win = window.open("", "_blank");
+  if(!win) return;
+
+  const css = `
+    <style>
+      @page{margin:12mm}
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0b1020}
+      h1{margin:0 0 6px 0;font-size:22px}
+      .meta{margin:0 0 14px 0;font-size:14px}
+      h2{margin:18px 0 8px 0;font-size:18px}
+      table{width:100%;border-collapse:collapse;font-size:13px}
+      th,td{border:1px solid #0b1020;padding:6px 8px;vertical-align:top}
+      th{background:#0b1020;color:#fff;text-align:left}
+      .pill{display:inline-block;border:1px solid #0b1020;border-radius:999px;padding:2px 8px;margin-right:6px;font-size:12px}
+      .small{font-size:12px}
+      .cat{margin-top:14px}
+      .muted{opacity:.75}
+      .wrap{white-space:pre-wrap;word-break:break-word}
+      .right{text-align:right}
+    </style>
+  `;
+
+  let html = `
+    <html><head><title>Seminary Report</title>${css}</head><body>
+      <h1>${escapeHtml(sess.title || "Session")}</h1>
+      <div class="meta">
+        <span class="pill">Date: ${escapeHtml(sess.date || "")}</span>
+        <span class="pill">Teams: ${sess.teams.length}</span>
+        <span class="pill">Categories: ${sess.categories.length}</span>
+        <span class="pill">Responses: ${totalResponses}</span>
+      </div>
+
+      <h2>Points</h2>
+      <table>
+        <thead><tr><th>Team</th><th class="right">Points</th><th>Members</th></tr></thead>
+        <tbody>
+          ${sortedTeams.map(t=>`
+            <tr>
+              <td>${escapeHtml(t.name||"Team")}</td>
+              <td class="right">${escapeHtml(String(t.points||0))}</td>
+              <td class="wrap">${escapeHtml((t.members||[]).map(m=>m.name).join(", "))}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+
+      <h2>Categories</h2>
+      <table>
+        <thead><tr><th>Category</th><th>Status</th><th class="right">Responses</th></tr></thead>
+        <tbody>
+          ${sortedCats.map(c=>{
+            const cnt = resp.filter(r=>r.categoryId===c.id).length;
+            return `
+              <tr>
+                <td class="wrap">${escapeHtml(c.name||"Category")}</td>
+                <td>${c.enabled ? "Auto-rotate ON" : "Auto-rotate OFF"}</td>
+                <td class="right">${cnt}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+
+      <h2>Responses by Category</h2>
+  `;
+
+  const catNames = [...catAgg.keys()].sort((a,b)=>String(a).localeCompare(String(b)));
+  if(catNames.length === 0){
+    html += `<div class="small muted">No responses recorded.</div>`;
+  } else {
+    for(const catName of catNames){
+      const tmap = catAgg.get(catName);
+      const teamNames = [...tmap.keys()].sort((a,b)=>String(a).localeCompare(String(b)));
+      html += `<div class="cat"><h3 style="margin:0 0 6px 0;font-size:16px">${escapeHtml(catName)}</h3>`;
+      html += `<table>
+        <thead><tr><th style="width:18%">Team</th><th style="width:18%">Member</th><th style="width:12%">Ref</th><th>Response</th></tr></thead>
+        <tbody>
+      `;
+      for(const teamName of teamNames){
+        const entries = tmap.get(teamName) || [];
+        for(const e of entries){
+          html += `
+            <tr>
+              <td>${escapeHtml(teamName)}</td>
+              <td>${escapeHtml(e.memberName)}</td>
+              <td>${escapeHtml(e.ref)}</td>
+              <td class="wrap">${escapeHtml(e.text)}</td>
+            </tr>
+          `;
+        }
+      }
+      html += `</tbody></table></div>`;
+    }
+  }
+
+  html += `</body></html>`;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+/* ========= teams/categories/gameplay helpers ========= */
+qs("#btnAddTeam").onclick=()=>{
+  const name=(qs("#newTeamName").value||"").trim() || "Team";
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess) return;
+
+  sess.teams.push({id:makeId("team"),name,points:0,members:[]});
+  sess.play.nextMemberIndexByTeamId[sess.teams[sess.teams.length-1].id] = 0;
+  save(state);
+
+  qs("#newTeamName").value="";
+  renderGame();
+};
+
+qs("#btnAddCategory").onclick=()=>addCategoryFromInput();
+qs("#newCategoryName").addEventListener("keydown",(e)=>{ if(e.key==="Enter") addCategoryFromInput(); });
+
+function addCategoryFromInput(){
+  const input = qs("#newCategoryName");
+  const name = (input.value||"").trim();
+  if(!name) return;
+
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess) return;
+
+  const exists = sess.categories.some(c => (c.name||"").trim().toLowerCase() === name.toLowerCase());
+  if(exists){ input.select(); return; }
+
+  sess.categories.push({id:makeId("cat"), name, enabled:true});
+  save(state);
+
+  renderGame();
+  requestAnimationFrame(()=>{ input.value=""; input.focus(); });
+}
+
+function getPlayableTeams(sess){ return sess.teams.filter(t => (t.members||[]).length > 0); }
+
+function getCurrentAndNext(sess){
+  const playable = getPlayableTeams(sess);
+  if(playable.length === 0) return { playable, currentTeam:null, currentMember:null, nextByTeam:{} };
+
+  let cti = sess.play.currentTeamIndex || 0;
+  cti = ((cti % playable.length) + playable.length) % playable.length;
+  sess.play.currentTeamIndex = cti;
+
+  const currentTeam = playable[cti];
+  const idx = sess.play.nextMemberIndexByTeamId[currentTeam.id] ?? 0;
+  const members = currentTeam.members;
+  const curMember = members.length ? members[idx % members.length] : null;
+
+  const nextByTeam = {};
+  for(const t of playable){
+    const mi = sess.play.nextMemberIndexByTeamId[t.id] ?? 0;
+    if(t.members.length) nextByTeam[t.id] = t.members[mi % t.members.length];
+  }
+  return { playable, currentTeam, currentMember: curMember, nextByTeam };
+}
+function advanceTurn(sess){
+  const playable = getPlayableTeams(sess);
+  if(playable.length === 0) return;
+
+  const ct = playable[sess.play.currentTeamIndex % playable.length];
+  const curIdx = sess.play.nextMemberIndexByTeamId[ct.id] ?? 0;
+  sess.play.nextMemberIndexByTeamId[ct.id] = curIdx + 1;
+
+  sess.play.currentTeamIndex = (sess.play.currentTeamIndex + 1) % playable.length;
+}
+function enabledCategories(sess){ return sess.categories.filter(c=>c.enabled); }
+function ensureActiveCategoryIsValid(sess){
+  if(!sess.categories.length){ sess.play.activeCategoryId = null; return; }
+  const cur = sess.categories.find(c=>c.id===sess.play.activeCategoryId);
+  if(cur) return;
+  const e = enabledCategories(sess);
+  sess.play.activeCategoryId = (e[0]?.id ?? sess.categories[0].id);
+}
+function rotateToNextEnabledCategory(sess){
+  const enabled = enabledCategories(sess);
+  if(enabled.length === 0){ sess.play.activeCategoryId = null; return; }
+  const curId = sess.play.activeCategoryId;
+  let idx = enabled.findIndex(c=>c.id===curId);
+  if(idx < 0) idx = 0;
+  const next = enabled[(idx + 1) % enabled.length];
+  sess.play.activeCategoryId = next?.id ?? enabled[0].id;
+  sess.play.categoryTurnsUsed = 0;
+}
+function maybeRotateByTurns(sess){
+  const rounds = Math.max(0, Number(sess.settings.turnsPerCategory) || 0);
+  if(rounds <= 0) return;
+
+  const playableCount = getPlayableTeams(sess).length;
+  if(playableCount <= 0) return;
+
+  const totalTeamTurnsNeeded = rounds * playableCount;
+  if(sess.play.categoryTurnsUsed >= totalTeamTurnsNeeded){
+    rotateToNextEnabledCategory(sess);
+  }
+}
+function addPoints(sess, teamId, delta){
+  const t = sess.teams.find(t=>t.id===teamId);
+  if(!t) return;
+  t.points = (Number(t.points)||0) + delta;
+}
+
+/* timer controls */
+qs("#turnSeconds").addEventListener("change", ()=>{
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess) return;
+  sess.settings.turnSeconds = Math.max(5, Number(qs("#turnSeconds").value) || 30);
+  save(state);
+});
+qs("#refLabel").addEventListener("input", ()=>{
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess) return;
+  const v = (qs("#refLabel").value||"").trim() || "Verse";
+  sess.settings.refLabel = v;
+  qs("#refLabelText").textContent = v;
+  save(state);
+});
+qs("#turnsPerCategory").addEventListener("change", ()=>{
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess) return;
+  sess.settings.turnsPerCategory = Math.max(0, Number(qs("#turnsPerCategory").value) || 0);
+  save(state);
+  renderGame();
+});
+qs("#btnPauseResume").addEventListener("click", ()=>{
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess || !sess.play.activeCategoryId) return;
+
+  sess.play.paused = !sess.play.paused;
+  save(state);
+  setTimerPausedUI(sess.play.paused);
+
+  if(!sess.play.paused && !timerInterval){
+    timerInterval = setInterval(()=>{
+      const st = ensureRootShape(load());
+      const s2 = getActiveSession(st);
+      if(!s2) { stopTimer(); return; }
+      if(s2.play.paused){
+        qs("#timerBig").textContent = formatMMSS(remainingMs);
+        return;
+      }
+      remainingMs -= 250;
+      if(remainingMs <= 0){
+        remainingMs = 0;
+        qs("#timerBig").textContent = "00:00";
+        s2.play.paused = true;
+        save(st);
+        setTimerPausedUI(true);
+        stopTimer();
+        renderGame();
+        return;
+      }
+      qs("#timerBig").textContent = formatMMSS(remainingMs);
+    }, 250);
+  }
+});
+
+/* response actions */
+qs("#btnSubmitResponse").addEventListener("click", ()=>submitResponse(true));
+qs("#responseText").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter" && (e.ctrlKey || e.metaKey)) submitResponse(true);
+});
+qs("#btnSkipNoPoint").addEventListener("click", ()=>{
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess || !sess.play.activeCategoryId) return;
+
+  sess.play.categoryTurnsUsed = (sess.play.categoryTurnsUsed || 0) + 1;
+  advanceTurn(sess);
+  maybeRotateByTurns(sess);
+
+  sess.play.paused = false;
+  save(state);
+
+  renderGame();
+  if(sess.play.activeCategoryId) startTurnTimer(state, sess);
+  else stopTimer();
+
+  requestAnimationFrame(()=>qs("#refNumber").focus());
+});
+qs("#btnStopChallenge").addEventListener("click", ()=>{
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess || !sess.play.activeCategoryId) return;
+
+  const { currentTeam } = getCurrentAndNext(sess);
+  if(!currentTeam) return;
+
+  addPoints(sess, currentTeam.id, 5);
+
+  const curCat = sess.categories.find(c=>c.id===sess.play.activeCategoryId);
+  if(curCat) curCat.enabled = false;
+
+  rotateToNextEnabledCategory(sess);
+  advanceTurn(sess);
+
+  sess.play.paused = false;
+  save(state);
+
+  renderGame();
+  if(sess.play.activeCategoryId){
+    qs("#timerBox").classList.remove("hidden");
+    startTurnTimer(state, sess);
+  } else {
+    stopTimer();
+  }
+  requestAnimationFrame(()=>qs("#refNumber").focus());
+});
+
+function submitResponse(awardPoint){
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess || !sess.play.activeCategoryId) return;
+
+  const { currentTeam, currentMember } = getCurrentAndNext(sess);
+  if(!currentTeam || !currentMember) return;
+
+  const refLabel = (sess.settings.refLabel || "Verse").trim() || "Verse";
+  const refNumber = (qs("#refNumber").value||"").trim();
+  const text = (qs("#responseText").value||"").trim();
+
+  if(!refNumber){ qs("#refNumber").focus(); return; }
+  if(!text){ qs("#responseText").focus(); return; }
+
+  sess.play.responses.push({
+    ts: Date.now(),
+    categoryId: sess.play.activeCategoryId,
+    teamId: currentTeam.id,
+    memberId: currentMember.id,
+    refLabel,
+    refNumber,
+    text
+  });
+
+  if(awardPoint) addPoints(sess, currentTeam.id, 1);
+
+  sess.play.categoryTurnsUsed = (sess.play.categoryTurnsUsed || 0) + 1;
+  advanceTurn(sess);
+  maybeRotateByTurns(sess);
+
+  qs("#refNumber").value = "";
+  qs("#responseText").value = "";
+
+  sess.play.paused = false;
+  save(state);
+
+  renderGame();
+  if(sess.play.activeCategoryId) startTurnTimer(state, sess);
+  else stopTimer();
+
+  requestAnimationFrame(()=>qs("#refNumber").focus());
+}
+
+/* responses table sorted by verse ref ONLY */
+qs("#btnClearResponses").addEventListener("click", ()=>{
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess) return;
+  sess.play.responses = [];
+  save(state);
+  renderGame();
+});
+
+function nameById(list, id){
+  const x = list.find(o=>o.id===id);
+  return x ? (x.name || "") : "";
+}
+function memberNameById(sess, teamId, memberId){
+  const t = sess.teams.find(t=>t.id===teamId);
+  const m = t?.members?.find(m=>m.id===memberId);
+  return m?.name || "";
+}
+function parseRefNumber(refNumber){
+  const s = String(refNumber||"").trim();
+  const m = s.match(/^(\d+)/);
+  const n = m ? Number(m[1]) : Number.NaN;
+  return { n, s };
+}
+function renderResponsesTable(sess){
+  const tbody = qs("#respTbody");
+  tbody.innerHTML = "";
+
+  const activeCatId = sess.play.activeCategoryId;
+
+  if(!activeCatId){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="small" colspan="4">Select a category to start.</td>`;
+    tbody.appendChild(tr);
+    qs("#respSummary").textContent = `0 for this category • ${sess.play.responses.length} total overall`;
+    return;
+  }
+
+  const rows = [...(sess.play.responses||[])]
+    .filter(r=>r.categoryId === activeCatId)
+    .sort((a,b)=>{
+      const A = parseRefNumber(a.refNumber);
+      const B = parseRefNumber(b.refNumber);
+      const aNan = Number.isNaN(A.n), bNan = Number.isNaN(B.n);
+      if(!aNan && !bNan && A.n !== B.n) return A.n - B.n;
+      if(aNan !== bNan) return aNan ? 1 : -1;
+      return String(A.s).localeCompare(String(B.s), undefined, {numeric:true, sensitivity:"base"});
+    });
+
+  qs("#respSummary").textContent = `${rows.length} for this category • ${sess.play.responses.length} total overall`;
+
+  if(rows.length === 0){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="small" colspan="4">No responses yet for this category.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  for(const r of rows){
+    const team = nameById(sess.teams, r.teamId) || "—";
+    const member = memberNameById(sess, r.teamId, r.memberId) || "—";
+    const ref = `${(r.refLabel||"Ref")} ${r.refNumber||""}`.trim();
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${escapeHtml(team)}</td>
+      <td>${escapeHtml(member)}</td>
+      <td class="small mono">${escapeHtml(ref)}</td>
+      <td class="wrapText">${escapeHtml(r.text||"")}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+/* categories render */
+function renderCategories(sess){
+  const wrap = qs("#catsWrap");
+  wrap.innerHTML = "";
+  qs("#catCount").textContent = `${sess.categories.length} total`;
+
+  sess.categories.forEach(cat=>{
+    const chip = document.createElement("div");
+    chip.className = "catChip" + (sess.play.activeCategoryId === cat.id ? " active" : "");
+
+    const del = document.createElement("button");
+    del.className = "cornerX";
+    del.textContent = "x";
+    del.title = "Delete category";
+    del.onclick = ()=>{
+      const st = ensureRootShape(load());
+      const s2 = getActiveSession(st);
+      if(!s2) return;
+
+      if(s2.play.activeCategoryId === cat.id){
+        s2.play.activeCategoryId = null;
+        s2.play.paused = true;
+        s2.play.categoryTurnsUsed = 0;
+        stopTimer();
+        remainingMs = 0;
+      }
+      s2.categories = s2.categories.filter(c=>c.id!==cat.id);
+      save(st);
+      renderGame();
+    };
+    chip.appendChild(del);
+
+    const top = document.createElement("div");
+    top.className = "catTop";
+
+    const name = document.createElement("div");
+    name.className = "catName";
+    name.textContent = cat.name || "Category";
+    name.title = cat.name || "Category";
+
+    const btns = document.createElement("div");
+    btns.className = "catBtns";
+
+    const btnStart = document.createElement("button");
+    btnStart.textContent = (sess.play.activeCategoryId === cat.id) ? "Active" : "Start";
+    btnStart.className = "smallBtn";
+    btnStart.onclick = ()=>{
+      const st = ensureRootShape(load());
+      const s2 = getActiveSession(st);
+      if(!s2) return;
+
+      s2.play.activeCategoryId = cat.id;
+      s2.play.categoryTurnsUsed = 0;
+
+      const playable = getPlayableTeams(s2);
+      if(playable.length === 0){
+        s2.play.paused = true;
+        save(st);
+        renderGame();
+        return;
+      }
+
+      s2.play.paused = false;
+      save(st);
+
+      renderGame();
+      qs("#timerBox").classList.remove("hidden");
+      startTurnTimer(st, s2);
+      requestAnimationFrame(()=>qs("#refNumber").focus());
+    };
+
+    btns.appendChild(btnStart);
+
+    top.appendChild(name);
+    top.appendChild(btns);
+
+    const bottom = document.createElement("div");
+    bottom.className = "catBottom";
+
+    const cb = document.createElement("input");
+    cb.type="checkbox";
+    cb.checked = !!cat.enabled;
+    cb.title = "Include in auto-rotation";
+    cb.addEventListener("change",(e)=>{
+      const st = ensureRootShape(load());
+      const s2 = getActiveSession(st);
+      if(!s2) return;
+      const c2 = s2.categories.find(x=>x.id===cat.id);
+      if(!c2) return;
+      c2.enabled = !!e.target.checked;
+      save(st);
+      renderGame();
+    });
+
+    bottom.appendChild(cb);
+
+    const badge = document.createElement("div");
+    badge.className = "badgeBR " + (sess.play.activeCategoryId===cat.id ? "active" : (cat.enabled ? "on" : "off"));
+    badge.textContent = (sess.play.activeCategoryId===cat.id) ? "ACTIVE" : (cat.enabled ? "ON" : "STOP");
+
+    chip.appendChild(top);
+    chip.appendChild(bottom);
+    chip.appendChild(badge);
+    wrap.appendChild(chip);
+  });
+}
+
+/* teams render + points */
+function renderPointsBar(sess){
+  const bar = qs("#pointsBar");
+  bar.innerHTML = "";
+  const sorted = [...sess.teams].sort((a,b)=>{
+    const ap = Number(a.points)||0, bp=Number(b.points)||0;
+    if(bp!==ap) return bp-ap;
+    return String(a.name||"").localeCompare(String(b.name||""));
+  });
+  for(const t of sorted){
+    const pill = document.createElement("div");
+    pill.className = "pointPill";
+    pill.innerHTML = `
+      <span class="nm">${escapeHtml(t.name||"Team")}</span>
+      <span class="pts">${escapeHtml(String(Number(t.points)||0))}</span>
+    `;
+    bar.appendChild(pill);
+  }
+}
+function renderTeams(state, sess){
+  const wrap=qs("#teamsWrap");
+  wrap.innerHTML="";
+
+  const info = getCurrentAndNext(sess);
+  const currentTeam = info.currentTeam;
+  const currentMember = info.currentMember;
+  const nextByTeam = info.nextByTeam;
+
+  sess.teams.forEach(team=>{
+    const card=document.createElement("div");
+    card.className="teamCard" + ((currentTeam && currentTeam.id===team.id) ? " currentTeam" : "");
+
+    const delTeam=document.createElement("button");
+    delTeam.className="cornerX";
+    delTeam.textContent="x";
+    delTeam.title="Delete team";
+    delTeam.onclick=()=>{
+      const st = ensureRootShape(load());
+      const s2 = getActiveSession(st);
+      if(!s2) return;
+
+      s2.teams = s2.teams.filter(t=>t.id!==team.id);
+      delete s2.play.nextMemberIndexByTeamId[team.id];
+
+      const p = getPlayableTeams(s2);
+      if(p.length === 0){
+        s2.play.currentTeamIndex = 0;
+        s2.play.paused = true;
+      } else {
+        s2.play.currentTeamIndex = Math.min(s2.play.currentTeamIndex, p.length-1);
+      }
+
+      save(st);
+      renderGame();
+    };
+    card.appendChild(delTeam);
+
+    const header=document.createElement("div");
+    header.className="teamHeader";
+
+    const nameInput=document.createElement("input");
+    nameInput.value=team.name || "Team";
+    nameInput.onchange=()=>{
+      team.name=(nameInput.value||"").trim() || "Team";
+      save(state);
+      renderGame();
+    };
+
+    const pts = document.createElement("div");
+    pts.className="pill";
+    pts.title="Points";
+    pts.textContent = `pts: ${Number(team.points)||0}`;
+
+    header.appendChild(nameInput);
+    header.appendChild(pts);
+    card.appendChild(header);
+
+    const grid=document.createElement("div");
+    grid.className="membersGrid";
+
+    (team.members||[]).forEach(m=>{
+      const row=document.createElement("div");
+      row.className="memberRow";
+
+      const isCurrent = !!(currentTeam && currentMember && currentTeam.id===team.id && currentMember.id===m.id);
+      const isNextOther = !!(
+        sess.play.activeCategoryId &&
+        currentTeam && currentTeam.id !== team.id &&
+        nextByTeam[team.id] && nextByTeam[team.id].id === m.id
+      );
+      if(isCurrent) row.classList.add("current");
+      else if(isNextOther) row.classList.add("next");
+
+      const nm=document.createElement("div");
+      nm.className="nm";
+      nm.textContent=m.name || "";
+      nm.title=m.name || "";
+
+      const del=document.createElement("button");
+      del.className="cornerX";
+      del.textContent="x";
+      del.title="Remove member";
+      del.onclick=()=>{
+        const st = ensureRootShape(load());
+        const s2 = getActiveSession(st);
+        if(!s2) return;
+
+        const t2 = s2.teams.find(t=>t.id===team.id);
+        if(!t2) return;
+
+        t2.members = (t2.members||[]).filter(x=>x.id!==m.id);
+
+        const ptr = s2.play.nextMemberIndexByTeamId[team.id] ?? 0;
+        if(t2.members.length === 0){
+          s2.play.nextMemberIndexByTeamId[team.id] = 0;
+        } else {
+          s2.play.nextMemberIndexByTeamId[team.id] = ptr % t2.members.length;
+        }
+
+        save(st);
+        renderGame();
+      };
+
+      row.appendChild(nm);
+      row.appendChild(del);
+      grid.appendChild(row);
+    });
+
+    card.appendChild(grid);
+
+    const addRow=document.createElement("div");
+    addRow.className="row addMemberRow";
+
+    const input=document.createElement("input");
+    input.placeholder="Add member";
+    input.dataset.team=team.id;
+
+    const btn=document.createElement("button");
+    btn.textContent="Add";
+    btn.className="smallBtn";
+
+    btn.onclick=()=>{
+      const name=input.value.trim();
+      if(!name) return;
+
+      team.members.push({id:makeId("m"),name});
+      if(!(team.id in sess.play.nextMemberIndexByTeamId)){
+        sess.play.nextMemberIndexByTeamId[team.id] = 0;
+      }
+      save(state);
+      renderGame();
+      requestAnimationFrame(()=>{ qs(`input[data-team="${team.id}"]`)?.focus(); });
+    };
+
+    input.onkeydown=e=>{ if(e.key==="Enter") btn.click(); };
+
+    addRow.appendChild(input);
+    addRow.appendChild(btn);
+    card.appendChild(addRow);
+
+    wrap.appendChild(card);
+  });
+}
+
+/* main render */
+function renderGame(){
+  const state=ensureRootShape(load());
+  const sess=getActiveSession(state);
+  if(!sess) return;
+
+  ensureActiveCategoryIsValid(sess);
+
+  qs("#gameSessionTitle").textContent = sess.title || "Session";
+  qs("#gameSessionMeta").textContent = `${sess.date || ""} • Teams: ${sess.teams.length} • Categories: ${sess.categories.length}`;
+  renderPointsBar(sess);
+
+  qs("#turnSeconds").value = String(sess.settings.turnSeconds ?? 30);
+  qs("#refLabel").value = sess.settings.refLabel ?? "Verse";
+  qs("#refLabelText").textContent = sess.settings.refLabel ?? "Verse";
+  qs("#turnsPerCategory").value = String(sess.settings.turnsPerCategory ?? 0);
+
+  const hasActiveCategory = !!sess.play.activeCategoryId;
+  qs("#timerBox").classList.toggle("hidden", !hasActiveCategory);
+
+  if(!hasActiveCategory){
+    qs("#responseBox").classList.add("hidden");
+    qs("#rightHint").classList.remove("hidden");
+  } else {
+    qs("#rightHint").classList.add("hidden");
+    qs("#responseBox").classList.remove("hidden");
+  }
+
+  const activeCat = sess.categories.find(c=>c.id===sess.play.activeCategoryId);
+  qs("#currentCategoryHeading").textContent = activeCat?.name || "—";
+
+  if(hasActiveCategory){
+    setTimerPausedUI(!!sess.play.paused);
+    if(!timerInterval){
+      const seconds = Math.max(5, Number(sess.settings.turnSeconds) || 30);
+      if(remainingMs <= 0 || remainingMs > seconds*1000) remainingMs = seconds*1000;
+      qs("#timerBig").textContent = formatMMSS(remainingMs);
+    }
+
+    const rounds = Math.max(0, Number(sess.settings.turnsPerCategory) || 0);
+    const playableCount = getPlayableTeams(sess).length;
+    const needed = (rounds > 0 && playableCount > 0) ? (rounds * playableCount) : 0;
+
+    qs("#catProgress").textContent = (needed > 0)
+      ? `${sess.play.categoryTurnsUsed || 0}/${needed}`
+      : "Off";
+
+    qs("#responseCategory").textContent = activeCat ? `Category: ${activeCat.name}` : "Category: —";
+
+    const { currentTeam, currentMember } = getCurrentAndNext(sess);
+    if(currentTeam && currentMember){
+      qs("#responseWho").innerHTML =
+        `Current: <span>${escapeHtml(currentTeam.name)}</span> • <span>${escapeHtml(currentMember.name)}</span>`;
+    } else {
+      qs("#responseWho").innerHTML = `<span>Add team members to start.</span>`;
+    }
+  } else {
+    qs("#catProgress").textContent = "—";
+  }
+
+  renderCategories(sess);
+  renderTeams(state, sess);
+  renderResponsesTable(sess);
+
+  save(state);
+}
+
+/* reopen active on refresh */
+(()=>{
+  const st=ensureRootShape(load());
+  if(st.active && st.sessions.some(x=>x.id===st.active)){
+    qs("#viewSessions").classList.add("hidden");
+    qs("#viewGame").classList.remove("hidden");
+    renderGame();
+
+    const sess=getActiveSession(st);
+    if(sess && sess.play.activeCategoryId && !sess.play.paused){
+      qs("#timerBox").classList.remove("hidden");
+      startTurnTimer(st, sess);
+    }
+  }
+})();
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js");
+}
+</script>
+</body>
+</html>
