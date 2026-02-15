@@ -299,7 +299,12 @@ table{width:100%;border-collapse:collapse;font-size:18px;table-layout:fixed}
 th,td{padding:10px 12px;border-bottom:2px solid var(--line);vertical-align:top}
 th{background:var(--ink);color:#fff;font-size:14px;font-weight:950;text-align:left}
 tbody tr:hover{background:var(--soft)}
-td.small{white-space:nowrap;font-size:14px}
+td.small{
+  overflow-wrap: normal;
+  white-space:wrap;
+  word-break: normal;
+  font-size:14px
+}
 td.wrapText{word-break:break-word}
 
 /* ===== RIGHT: fixed timer + add category + response entry; scroll only categories list ===== */
@@ -1168,28 +1173,17 @@ qs("#btnBack").onclick=()=>{
 };
 
 /* ========= report printing ========= */
-function firstNumberForSort(refNumber){
-  const s = String(refNumber ?? "").trim();
-  const m = s.match(/(\d+)/);            // first number anywhere
-  const n = m ? Number(m[1]) : Number.NaN;
-  return { n, s };
-}
-function compareByVerseOnly(a, b){
-  const A = firstNumberForSort(a.refNumber);
-  const B = firstNumberForSort(b.refNumber);
+function compareRefAlphanumeric(a, b){
+  const A = String(a.refNumber ?? "").trim();
+  const B = String(b.refNumber ?? "").trim();
 
-  const aNan = Number.isNaN(A.n), bNan = Number.isNaN(B.n);
-  if(!aNan && !bNan && A.n !== B.n) return A.n - B.n;
-  if(aNan !== bNan) return aNan ? 1 : -1;
+  // blanks last
+  if(!A && !B) return 0;
+  if(!A) return 1;
+  if(!B) return -1;
 
-  // tie-break: raw string (so 13a vs 13b has stable ordering)
-  const s = String(A.s).localeCompare(String(B.s), undefined, { numeric:true, sensitivity:"base" });
-  if(s !== 0) return s;
-
-  // final tie-breaks for stability
-  const t = String(a.teamName).localeCompare(String(b.teamName));
-  if(t !== 0) return t;
-  return String(a.memberName).localeCompare(String(b.memberName));
+  // numeric-aware, case-insensitive, "2" < "10", "2a" after "2"
+  return A.localeCompare(B, undefined, { numeric: true, sensitivity: "base" });
 }
 function printSessionReport(sessionId){
   const state = ensureRootShape(load());
@@ -1213,7 +1207,7 @@ function printSessionReport(sessionId){
     tmap.get(teamName).push({
       memberName,
       refNumber: r.refNumber || "",
-      ref: `${(r.refLabel||"Ref")} ${r.refNumber||""}`.trim(),
+      ref: `${r.refNumber||""}`.trim(),
       text: r.text || ""
     });
   }
@@ -1301,7 +1295,7 @@ function printSessionReport(sessionId){
         <tbody>
       `;
       for(const teamName of teamNames){
-        const entries = (tmap.get(teamName) || []).slice().sort(compareByVerseOnly);
+        const entries = (tmap.get(teamName) || []).slice().sort(compareRefAlphanumeric);
         for(const e of entries){
           html += `
             <tr>
@@ -1634,14 +1628,7 @@ function renderResponsesTable(sess){
 
   const rows = [...(sess.play.responses||[])]
     .filter(r=>r.categoryId === activeCatId)
-    .sort((a,b)=>{
-      const A = parseRefNumber(a.refNumber);
-      const B = parseRefNumber(b.refNumber);
-      const aNan = Number.isNaN(A.n), bNan = Number.isNaN(B.n);
-      if(!aNan && !bNan && A.n !== B.n) return A.n - B.n;
-      if(aNan !== bNan) return aNan ? 1 : -1;
-      return String(A.s).localeCompare(String(B.s), undefined, {numeric:true, sensitivity:"base"});
-    });
+    .sort(compareRefAlphanumeric);
 
   qs("#respSummary").textContent = `${rows.length} for this category • ${sess.play.responses.length} total overall`;
 
@@ -1655,7 +1642,7 @@ function renderResponsesTable(sess){
   for(const r of rows){
     const team = nameById(sess.teams, r.teamId) || "—";
     const member = memberNameById(sess, r.teamId, r.memberId) || "—";
-    const ref = `${(r.refLabel||"Ref")} ${r.refNumber||""}`.trim();
+    const ref = `${r.refNumber||""}`.trim();
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -2120,12 +2107,12 @@ function initDisplayView(){
     const rows = (sess.play.responses||[])
       .filter(r=>r.categoryId === activeId)
       .slice()
-      .sort((a,b)=>Number(a.refNumber)-Number(b.refNumber)); // verse numbers only
+      .sort(compareRefAlphanumeric); // verse numbers only
 
     for(const r of rows){
       const teamName = nameById(sess.teams, r.teamId) || "—";
       const memberName = memberNameById(sess, r.teamId, r.memberId) || "—";
-      const ref = `${(r.refLabel||"Ref")} ${r.refNumber||""}`.trim();
+      const ref = `${r.refNumber||""}`.trim();
 
       const rr = document.createElement("div");
       rr.className = "dispRespRow";
