@@ -2142,80 +2142,136 @@ function initDisplayView(){
         nextGrid.appendChild(row);
       }
     }
-
-    // responses (selected category) — PAGED FADE
+    // responses (selected category) — PAGED FADE (stable across 1s re-renders)
     const respBox = qs("#dispResponses");
-    respBox.innerHTML = "";
-
     const activeCatId = sess.play.activeCategoryId;
+
+    // pager state (kept across render() calls)
+    if(!initDisplayView._respPager){
+      initDisplayView._respPager = {
+        sig: null,
+        boxH: -1,
+        rowH: 0,
+        rowsPerPage: 0,
+        totalPages: 0,
+        allRows: [],
+        currentPage: 0,
+        pageTimer: null,
+      };
+      respBox.style.transition = `opacity ${FADE_DURATION_MS}ms ease`;
+      respBox.style.opacity = "1";
+    }
+    const pager = initDisplayView._respPager;
+
+    function clearPager(){
+      if(pager.pageTimer) clearInterval(pager.pageTimer);
+      pager.pageTimer = null;
+      pager.sig = null;
+      pager.boxH = -1;
+      pager.rowH = 0;
+      pager.rowsPerPage = 0;
+      pager.totalPages = 0;
+      pager.allRows = [];
+      pager.currentPage = 0;
+    }
+
+    function buildSig(catId, list){
+      // stable signature so the pager doesn't reset every second
+      // (include enough fields to catch real changes)
+      return (catId||"") + "|" + list.length + "|" + list.map(r=>[
+        r.teamId||"", r.memberId||"", (r.refNumber||""), (r.text||"")
+      ].join("§")).join("¶");
+    }
+
+    function showPage(pageIndex){
+      const start = pageIndex * pager.rowsPerPage;
+      const end = start + pager.rowsPerPage;
+
+      // fade out
+      respBox.style.opacity = "0";
+
+      // when fully transparent, swap page, then fade in
+      setTimeout(()=>{
+        respBox.innerHTML = "";
+        pager.allRows.slice(start, end).forEach(el => respBox.appendChild(el.cloneNode(true)));
+        requestAnimationFrame(()=>{ respBox.style.opacity = "1"; });
+      }, FADE_DURATION_MS);
+    }
+
     const rows = (sess.play.responses || [])
       .filter(r => r.categoryId === activeCatId)
+      .slice()
       .sort(compareRefAlphanumeric);
 
-    if(!activeCatId || rows.length === 0){
+    if(!activeCatId){
+      clearPager();
+      respBox.innerHTML = `<div style="font-size:28px;opacity:.7">Select a category to start.</div>`;
+    } else if(rows.length === 0){
+      clearPager();
       respBox.innerHTML = `<div style="font-size:28px;opacity:.7">No responses yet.</div>`;
     } else {
+      const sig = buildSig(activeCatId, rows);
+      const boxH = respBox.clientHeight || 0;
 
-      // build all row elements first
-      const allRows = rows.map(r=>{
-        const team = nameById(sess.teams, r.teamId) || "—";
-        const member = memberNameById(sess, r.teamId, r.memberId) || "—";
-        const ref = `${r.refNumber||""}`.trim();
+      const needsRebuild = (pager.sig !== sig) || (pager.boxH !== boxH) || (pager.allRows.length === 0);
 
-        const div = document.createElement("div");
-        div.className = "dispRespRow";
-        div.innerHTML = `
-          <div>${escapeHtml(team)}</div>
-          <div>${escapeHtml(member)}</div>
-          <div class="ref">${escapeHtml(ref)}</div>
-          <div>${escapeHtml(r.text||"")}</div>
-        `;
-        return div;
-      });
+      if(needsRebuild){
+        pager.sig = sig;
+        pager.boxH = boxH;
 
-      // measure rows per page
-      const temp = document.createElement("div");
-      temp.style.visibility = "hidden";
-      temp.appendChild(allRows[0].cloneNode(true));
-      respBox.appendChild(temp);
-      const rowHeight = temp.firstChild.offsetHeight || 60;
-      respBox.innerHTML = "";
+        // build all row elements
+        pager.allRows = rows.map(r=>{
+          const team = nameById(sess.teams, r.teamId) || "—";
+          const member = memberNameById(sess, r.teamId, r.memberId) || "—";
+          const ref = `${r.refNumber||""}`.trim();
 
-      const rowsPerPage = Math.max(1, Math.floor(respBox.clientHeight / rowHeight));
-      const totalPages = Math.ceil(allRows.length / rowsPerPage);
+          const div = document.createElement("div");
+          div.className = "dispRespRow";
+          div.innerHTML = `
+            <div>${escapeHtml(team)}</div>
+            <div>${escapeHtml(member)}</div>
+            <div class="ref">${escapeHtml(ref)}</div>
+            <div>${escapeHtml(r.text||"")}</div>
+          `;
+          return div;
+        });
 
-      function showPage(pageIndex){
-        respBox.style.opacity = "0";
+        // measure row height once per rebuild (depends on font + layout)
+        const temp = document.createElement("div");
+        temp.style.visibility = "hidden";
+        temp.style.position = "absolute";
+        temp.style.left = "-99999px";
+        temp.appendChild(pager.allRows[0].cloneNode(true));
+        document.body.appendChild(temp);
+        pager.rowH = temp.firstChild?.offsetHeight || pager.rowH || 60;
+        temp.remove();
 
-        setTimeout(()=>{
-          respBox.innerHTML = "";
+        pager.rowsPerPage = Math.max(1, Math.floor((respBox.clientHeight || 1) / (pager.rowH || 60)));
+        pager.totalPages = Math.max(1, Math.ceil(pager.allRows.length / pager.rowsPerPage));
 
-          const start = pageIndex * rowsPerPage;
-          const end = start + rowsPerPage;
+        // reset paging from the top
+        pager.currentPage = 0;
 
-          allRows.slice(start, end).forEach(r=>respBox.appendChild(r.cloneNode(true)));
+        // show immediately
+        respBox.innerHTML = "";
+        pager.allRows.slice(0, pager.rowsPerPage).forEach(el => respBox.appendChild(el.cloneNode(true)));
+        respBox.style.opacity = "1";
 
-          respBox.style.opacity = "1";
-        }, FADE_DURATION_MS);
+        // (re)start timer only if needed
+        if(pager.pageTimer) clearInterval(pager.pageTimer);
+        pager.pageTimer = null;
+
+        if(pager.totalPages > 1){
+          pager.pageTimer = setInterval(()=>{
+            pager.currentPage = (pager.currentPage + 1) % pager.totalPages;
+            showPage(pager.currentPage);
+          }, PAGE_DURATION_MS);
+        }
       }
-
-      respBox.style.transition = `opacity ${FADE_DURATION_MS}ms ease`;
-
-      if(totalPages > 1){
-        if(pageTimer) clearInterval(pageTimer);
-
-        currentPage = 0;
-        showPage(currentPage);
-
-        pageTimer = setInterval(()=>{
-          currentPage = (currentPage + 1) % totalPages;
-          showPage(currentPage);
-        }, PAGE_DURATION_MS);
-      } else {
-        showPage(0);
-      }
+      // else: unchanged — leave the current page & timer alone
     }
   }
+
 
   // fast sync when main app changes state
   try{
