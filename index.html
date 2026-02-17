@@ -2073,17 +2073,11 @@ function initDisplayView(){
     const activeCat = sess.categories.find(c=>c.id===sess.play.activeCategoryId);
     qs("#dispCategory").textContent = activeCat?.name || "—";
 
-    // current team/member (CURRENTLY UP)
-    const playable2 = getPlayableTeams(sess);
-    if(playable2.length){
-      let cti2 = Number(sess.play.currentTeamIndex || 0);
-      cti2 = ((cti2 % playable2.length) + playable2.length) % playable2.length;
-      const ct = playable2[cti2];
-      const nextId = sess.play.nextMemberIdByTeamId[ct.id];
-      let idx = ct.members.findIndex(m => m.id === nextId);
-      if (idx < 0) idx = 0;
-      const cm = ct.members.length ? ct.members[idx] : null;
-      qs("#dispCurrentUp").textContent = `Currently: ${ct.name} — ${cm?.name || "—"}`;
+    // current team/member (CURRENTLY UP) — use same logic as dashboard
+    const info = getCurrentAndNext(sess);
+    if(info.playable.length && info.currentTeam && info.currentMember){
+      qs("#dispCurrentUp").textContent =
+        `Currently: ${info.currentTeam.name} — ${info.currentMember.name || "—"}`;
     } else {
       qs("#dispCurrentUp").textContent = "Currently: —";
     }
@@ -2113,25 +2107,22 @@ function initDisplayView(){
       scoresGrid.appendChild(el);
     }
 
-    // who's up next (TURN ORDER, starting with NEXT team — not current)
+    // who's up next — use same logic as dashboard
     const nextGrid = qs("#dispNextGrid");
     nextGrid.innerHTML = "";
 
-    const playable = getPlayableTeams(sess);
+    const playable = info.playable;
     if(playable.length){
+      // info.currentTeamIndex is already normalized by getCurrentAndNext via sess.play.currentTeamIndex
       let cti = Number(sess.play.currentTeamIndex || 0);
       cti = ((cti % playable.length) + playable.length) % playable.length;
 
       // order starting AFTER current team
       const ordered = playable.slice(cti + 1).concat(playable.slice(0, cti + 1));
-
-      // if only one team, this will just show that team (still fine)
       const list = ordered.length ? ordered : playable;
 
       for(const t of list){
-        const nmId = sess.play.nextMemberIdByTeamId[t.id];
-        const i = t.members.findIndex(m => m.id === nmId);
-        const m = t.members.length ? t.members[(i < 0 ? 0 : i) % t.members.length] : null;
+        const m = info.nextByTeam?.[t.id] || null;
 
         const row = document.createElement("div");
         row.className = "dispNextRow";
@@ -2142,6 +2133,7 @@ function initDisplayView(){
         nextGrid.appendChild(row);
       }
     }
+
     // responses (selected category) — PAGED FADE (stable across 1s re-renders)
     const respBox = qs("#dispResponses");
     const activeCatId = sess.play.activeCategoryId;
