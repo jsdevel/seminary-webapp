@@ -540,6 +540,13 @@ td.wrapText{word-break:break-word}
   font-weight:950;
 }
 
+.dispScorePill > :first-child {
+  margin-right: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dispNextGrid{
   display:grid;
   grid-template-columns: 1fr;
@@ -626,6 +633,12 @@ td.wrapText{word-break:break-word}
 }
 .dispRespRow:last-child{border-bottom:none}
 .dispRespRow .ref{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.dispRespRow > div:first-child,
+.dispRespHeader > div:first-child{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 </style>
 </head>
 
@@ -1573,7 +1586,6 @@ qs("#btnSkipNoPoint").addEventListener("click", ()=>{
   const sess=getActiveSession(state);
   if(!sess || !sess.play.activeCategoryId) return;
 
-  sess.play.categoryTurnsUsed = (sess.play.categoryTurnsUsed || 0) + 1;
   advanceTurn(sess);
   maybeRotateByTurns(sess);
 
