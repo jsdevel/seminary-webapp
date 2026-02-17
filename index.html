@@ -582,32 +582,6 @@ td.wrapText{word-break:break-word}
 }
 .dispRespRow:last-child{border-bottom:none}
 .dispRespRow .ref{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
-
-.dispMainRow {
-  display: flex;
-  gap: 40px;
-  flex: 1;
-  min-height: 0;
-}
-
-.dispBottom {
-  flex: 2;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.dispResponses {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.dispMid {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
 </style>
 </head>
 
@@ -814,24 +788,23 @@ td.wrapText{word-break:break-word}
         </div>
       </div>
 
-      <div class="dispMainRow">
-        <div class="dispBottom">
-          <div class="dispSectionTitle">Responses (selected category)</div>
-          <div class="dispResponses" id="dispResponses"></div>
+      <div class="dispMid">
+        <div class="dispScores">
+          <div class="dispSectionTitle">Team Scores</div>
+          <div id="dispScoresGrid" class="dispScoresGrid"></div>
         </div>
 
-        <div class="dispMid">
-          <div class="dispScores">
-            <div class="dispSectionTitle">Team Scores</div>
-            <div id="dispScoresGrid" class="dispScoresGrid"></div>
-          </div>
-
-          <div class="dispNext">
-            <div class="dispSectionTitle">Who’s Up Next</div>
-            <div id="dispNextGrid" class="dispNextGrid"></div>
-          </div>
+        <div class="dispNext">
+          <div class="dispSectionTitle">Who’s Up Next</div>
+          <div id="dispNextGrid" class="dispNextGrid"></div>
         </div>
       </div>
+
+      <div class="dispBottom">
+        <div class="dispSectionTitle">Responses (selected category)</div>
+        <div class="dispResponses" id="dispResponses"></div>
+      </div>
+    </div>
   </div>
 
 
@@ -2081,6 +2054,11 @@ function initDisplayView(){
   const sessId = getDisplaySessionId();
   let lastDisplayedCatId = null;
   let lastDisplayedCount = -1;
+  const PAGE_DURATION_MS = 3000;
+  const FADE_DURATION_MS = 180;
+  let currentPage = 0;
+  let pageTimer = null;
+
 
   function render(){
     const st = ensureRootShape(load());
@@ -2165,57 +2143,78 @@ function initDisplayView(){
       }
     }
 
-    // responses (selected category) — BIG
-    const box = qs("#dispResponses");
+    // responses (selected category) — PAGED FADE
+    const respBox = qs("#dispResponses");
+    respBox.innerHTML = "";
 
-    // preserve scroll position unless new response appears
-    const activeId = sess.play.activeCategoryId;
+    const activeCatId = sess.play.activeCategoryId;
+    const rows = (sess.play.responses || [])
+      .filter(r => r.categoryId === activeCatId)
+      .sort(compareRefAlphanumeric);
 
-    box.innerHTML = "";
+    if(!activeCatId || rows.length === 0){
+      respBox.innerHTML = `<div style="font-size:28px;opacity:.7">No responses yet.</div>`;
+    } else {
 
-    if(!activeId){
-      box.innerHTML = `<div style="font-size:28px; opacity:.8;">Select a category to start.</div>`;
-      lastDisplayedCatId = null;
-      lastDisplayedCount = -1;
-      return;
-    }
+      // build all row elements first
+      const allRows = rows.map(r=>{
+        const team = nameById(sess.teams, r.teamId) || "—";
+        const member = memberNameById(sess, r.teamId, r.memberId) || "—";
+        const ref = `${r.refNumber||""}`.trim();
 
-    const rows = (sess.play.responses||[])
-      .filter(r=>r.categoryId === activeId)
-      .slice()
-      .sort(compareRefAlphanumeric); // verse numbers only
-
-    for(const r of rows){
-      const teamName = nameById(sess.teams, r.teamId) || "—";
-      const memberName = memberNameById(sess, r.teamId, r.memberId) || "—";
-      const ref = `${r.refNumber||""}`.trim();
-
-      const rr = document.createElement("div");
-      rr.className = "dispRespRow";
-      rr.innerHTML = `
-        <div>${escapeHtml(teamName)}</div>
-        <div>${escapeHtml(memberName)}</div>
-        <div class="ref">${escapeHtml(ref)}</div>
-        <div>${escapeHtml(r.text||"")}</div>
-      `;
-      box.appendChild(rr);
-    }
-
-    // ONLY auto-scroll when a new response is submitted (count increases)
-    // also scroll when category changes (new list)
-    const count = rows.length;
-    const catChanged = (lastDisplayedCatId !== activeId);
-    const newResponse = (!catChanged && count > lastDisplayedCount);
-
-    if(catChanged || newResponse){
-      requestAnimationFrame(() => {
-        box.scrollTop = box.scrollHeight;
+        const div = document.createElement("div");
+        div.className = "dispRespRow";
+        div.innerHTML = `
+          <div>${escapeHtml(team)}</div>
+          <div>${escapeHtml(member)}</div>
+          <div class="ref">${escapeHtml(ref)}</div>
+          <div>${escapeHtml(r.text||"")}</div>
+        `;
+        return div;
       });
+
+      // measure rows per page
+      const temp = document.createElement("div");
+      temp.style.visibility = "hidden";
+      temp.appendChild(allRows[0].cloneNode(true));
+      respBox.appendChild(temp);
+      const rowHeight = temp.firstChild.offsetHeight || 60;
+      respBox.innerHTML = "";
+
+      const rowsPerPage = Math.max(1, Math.floor(respBox.clientHeight / rowHeight));
+      const totalPages = Math.ceil(allRows.length / rowsPerPage);
+
+      function showPage(pageIndex){
+        respBox.style.opacity = "0";
+
+        setTimeout(()=>{
+          respBox.innerHTML = "";
+
+          const start = pageIndex * rowsPerPage;
+          const end = start + rowsPerPage;
+
+          allRows.slice(start, end).forEach(r=>respBox.appendChild(r.cloneNode(true)));
+
+          respBox.style.opacity = "1";
+        }, FADE_DURATION_MS);
+      }
+
+      respBox.style.transition = `opacity ${FADE_DURATION_MS}ms ease`;
+
+      if(totalPages > 1){
+        if(pageTimer) clearInterval(pageTimer);
+
+        currentPage = 0;
+        showPage(currentPage);
+
+        pageTimer = setInterval(()=>{
+          currentPage = (currentPage + 1) % totalPages;
+          showPage(currentPage);
+        }, PAGE_DURATION_MS);
+      } else {
+        showPage(0);
+      }
     }
-
-    lastDisplayedCatId = activeId;
-    lastDisplayedCount = count;
-
   }
 
   // fast sync when main app changes state
