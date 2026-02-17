@@ -1884,37 +1884,45 @@ function renderTeams(state, sess){
       del.className="cornerX";
       del.textContent="x";
       del.title="Remove member";
-      del.onclick = ()=>{
+      del.onclick = () => {
         const st = ensureRootShape(load());
         const s2 = getActiveSession(st);
-        if(!s2) return;
+        if (!s2) return;
 
-        const t2 = s2.teams.find(t=>t.id===team.id);
-        if(!t2) return;
+        const t2 = s2.teams.find(t => t.id === team.id);
+        if (!t2) return;
 
         const oldMembers = t2.members || [];
         const currentId = s2.play.nextMemberIdByTeamId[team.id];
-        const oldIdx = oldMembers.findIndex(x => x.id === currentId);
 
         // remove clicked member
-        t2.members = oldMembers.filter(x=>x.id!==m.id);
+        t2.members = oldMembers.filter(x => x.id !== m.id);
 
+        // if team now empty, clear pointer
         if (!t2.members.length) {
           s2.play.nextMemberIdByTeamId[team.id] = undefined;
-        } else {
-          let newIdx;
-
-          if (oldIdx < 0) {
-            newIdx = 0;
-          } else if (oldIdx >= t2.members.length) {
-            newIdx = 0; // wrapped past end
-          } else {
-            newIdx = oldIdx;
-          }
-
-          s2.play.nextMemberIdByTeamId[team.id] =
-            t2.members[newIdx].id;
+          save(st);
+          renderGame();
+          return;
         }
+
+        const currentStillExists = !!currentId && t2.members.some(x => x.id === currentId);
+
+        // IMPORTANT: if we removed someone else, keep the currentId exactly the same
+        if (currentStillExists && m.id !== currentId) {
+          save(st);
+          renderGame();
+          return;
+        }
+
+        // Otherwise, we removed the current person (or currentId was invalid) — choose a new one
+        const oldIdx = oldMembers.findIndex(x => x.id === currentId);
+
+        // If we removed the current person, selecting `oldIdx` in the *new* array effectively advances to next
+        // If oldIdx is weird/missing, fall back to 0
+        let newIdx = (oldIdx >= 0) ? Math.min(oldIdx, t2.members.length - 1) : 0;
+
+        s2.play.nextMemberIdByTeamId[team.id] = t2.members[newIdx].id;
 
         save(st);
         renderGame();
