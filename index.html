@@ -582,6 +582,32 @@ td.wrapText{word-break:break-word}
 }
 .dispRespRow:last-child{border-bottom:none}
 .dispRespRow .ref{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+
+.dispMainRow {
+  display: flex;
+  gap: 40px;
+  flex: 1;
+  min-height: 0;
+}
+
+.dispBottom {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dispResponses {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.dispMid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
 </style>
 </head>
 
@@ -788,23 +814,24 @@ td.wrapText{word-break:break-word}
         </div>
       </div>
 
-      <div class="dispMid">
-        <div class="dispScores">
-          <div class="dispSectionTitle">Team Scores</div>
-          <div id="dispScoresGrid" class="dispScoresGrid"></div>
+      <div class="dispMainRow">
+        <div class="dispBottom">
+          <div class="dispSectionTitle">Responses (selected category)</div>
+          <div class="dispResponses" id="dispResponses"></div>
         </div>
 
-        <div class="dispNext">
-          <div class="dispSectionTitle">Who’s Up Next</div>
-          <div id="dispNextGrid" class="dispNextGrid"></div>
+        <div class="dispMid">
+          <div class="dispScores">
+            <div class="dispSectionTitle">Team Scores</div>
+            <div id="dispScoresGrid" class="dispScoresGrid"></div>
+          </div>
+
+          <div class="dispNext">
+            <div class="dispSectionTitle">Who’s Up Next</div>
+            <div id="dispNextGrid" class="dispNextGrid"></div>
+          </div>
         </div>
       </div>
-
-      <div class="dispBottom">
-        <div class="dispSectionTitle">Responses (selected category)</div>
-        <div class="dispResponses" id="dispResponses"></div>
-      </div>
-    </div>
   </div>
 
 
@@ -879,7 +906,7 @@ function ensureSessionShape(sess){
     sess.play = {
       activeCategoryId: null,
       currentTeamIndex: 0,
-      nextMemberIndexByTeamId: {},
+      nextMemberIdByTeamId: {},
       paused: true,
       categoryTurnsUsed: 0,
       responses: []
@@ -889,17 +916,19 @@ function ensureSessionShape(sess){
   if(typeof sess.play.currentTeamIndex !== "number") sess.play.currentTeamIndex = 0;
   if(typeof sess.play.paused !== "boolean") sess.play.paused = true;
   if(typeof sess.play.categoryTurnsUsed !== "number" || !isFinite(sess.play.categoryTurnsUsed)) sess.play.categoryTurnsUsed = 0;
-  if(!sess.play.nextMemberIndexByTeamId || typeof sess.play.nextMemberIndexByTeamId!=="object"){
-    sess.play.nextMemberIndexByTeamId = {};
+  if(!sess.play.nextMemberIdByTeamId || typeof sess.play.nextMemberIdByTeamId!=="object"){
+    sess.play.nextMemberIdByTeamId = {};
   }
 
   for(const t of sess.teams){
-    if(!(t.id in sess.play.nextMemberIndexByTeamId)){
-      sess.play.nextMemberIndexByTeamId[t.id] = 0;
+    if(!(t.id in sess.play.nextMemberIdByTeamId)){
+      if (t.members && t.members.length) {
+        sess.play.nextMemberIdByTeamId[t.id] = t.members[0].id
+      }
     }
   }
-  for(const k of Object.keys(sess.play.nextMemberIndexByTeamId)){
-    if(!sess.teams.some(t=>t.id===k)) delete sess.play.nextMemberIndexByTeamId[k];
+  for(const k of Object.keys(sess.play.nextMemberIdByTeamId)){
+    if(!sess.teams.some(t=>t.id===k)) delete sess.play.nextMemberIdByTeamId[k];
   }
 
   if(sess.play.activeCategoryId && !sess.categories.some(c=>c.id===sess.play.activeCategoryId)){
@@ -1060,8 +1089,10 @@ qs("#btnCreate").onclick=()=>{
     };
   });
 
-  const nextMemberIndexByTeamId = {};
-  for(const t of teams) nextMemberIndexByTeamId[t.id] = 0;
+  const nextMemberIdByTeamId = {};
+  for(const t of teams) {
+    nextMemberIdByTeamId[t.id] = t.members[0] ? t.members[0].id : undefined;
+  }
 
   state.sessions.push({
     id:makeId("sess"),
@@ -1070,7 +1101,7 @@ qs("#btnCreate").onclick=()=>{
     teams,
     categories:[],
     settings:{turnSeconds:30, refLabel:"Verse", turnsPerCategory:0},
-    play:{activeCategoryId:null,currentTeamIndex:0,nextMemberIndexByTeamId,paused:true,categoryTurnsUsed:0,responses:[]}
+    play:{activeCategoryId:null,currentTeamIndex:0,nextMemberIdByTeamId,paused:true,categoryTurnsUsed:0,responses:[]}
   });
 
   save(state);
@@ -1327,7 +1358,7 @@ qs("#btnAddTeam").onclick=()=>{
   if(!sess) return;
 
   sess.teams.push({id:makeId("team"),name,points:0,members:[]});
-  sess.play.nextMemberIndexByTeamId[sess.teams[sess.teams.length-1].id] = 0;
+  sess.play.nextMemberIdByTeamId[sess.teams[sess.teams.length-1].id] = undefined;
   save(state);
 
   qs("#newTeamName").value="";
@@ -1374,27 +1405,40 @@ function getCurrentAndNext(sess){
   sess.play.currentTeamIndex = cti;
 
   const currentTeam = playable[cti];
-  const idx = sess.play.nextMemberIndexByTeamId[currentTeam.id] ?? 0;
   const members = currentTeam.members;
-  const curMember = members.length ? members[idx % members.length] : null;
+  const nextId = sess.play.nextMemberIdByTeamId[currentTeam.id]; // string | undefined
+  let idx = members.findIndex(m => m.id === nextId);
+  if (idx < 0) idx = 0;
+  const curMember = members.length ? members[idx] : null;
 
   const nextByTeam = {};
-  for(const t of playable){
-    const mi = sess.play.nextMemberIndexByTeamId[t.id] ?? 0;
-    if(t.members.length) nextByTeam[t.id] = t.members[mi % t.members.length];
+  for (const t of playable) {
+    if (!t.members.length) continue;
+    const nextId = sess.play.nextMemberIdByTeamId[t.id];
+    let mi = t.members.findIndex(m => m.id === nextId);
+    if (mi < 0) mi = 0;
+    nextByTeam[t.id] = t.members[mi];
   }
   return { playable, currentTeam, currentMember: curMember, nextByTeam };
 }
+
 function advanceTurn(sess){
   const playable = getPlayableTeams(sess);
   if(playable.length === 0) return;
-
-  const ct = playable[sess.play.currentTeamIndex % playable.length];
-  const curIdx = sess.play.nextMemberIndexByTeamId[ct.id] ?? 0;
-  sess.play.nextMemberIndexByTeamId[ct.id] = curIdx + 1;
-
-  sess.play.currentTeamIndex = (sess.play.currentTeamIndex + 1) % playable.length;
+  let cti = sess.play.currentTeamIndex || 0;
+  cti = ((cti % playable.length) + playable.length) % playable.length;
+  const ct = playable[cti];
+  if(ct.members.length){
+    const currentId = sess.play.nextMemberIdByTeamId[ct.id];
+    let idx = ct.members.findIndex(m => m.id === currentId);
+    if(idx < 0) idx = 0;
+    const nextIdx = (idx + 1) % ct.members.length;
+    sess.play.nextMemberIdByTeamId[ct.id] = ct.members[nextIdx].id;
+  }
+  sess.play.currentTeamIndex =
+    (cti + 1) % playable.length;
 }
+
 function enabledCategories(sess){ return sess.categories.filter(c=>c.enabled); }
 function ensureActiveCategoryIsValid(sess){
   if(!sess.categories.length){ sess.play.activeCategoryId = null; return; }
@@ -1796,13 +1840,22 @@ function renderTeams(state, sess){
       const s2 = getActiveSession(st);
       if(!s2) return;
 
-      s2.teams = s2.teams.filter(t=>t.id!==team.id);
-      delete s2.play.nextMemberIndexByTeamId[team.id];
+      // capture current team ID before mutation
+      const before = getCurrentAndNext(s2);
+      const currentTeamId = before.currentTeam?.id || null;
 
+      // delete team
+      s2.teams = s2.teams.filter(t=>t.id!==team.id);
+      delete s2.play.nextMemberIdByTeamId[team.id];
+
+      // restore currentTeamIndex by ID (not by old index)
       const p = getPlayableTeams(s2);
       if(p.length === 0){
         s2.play.currentTeamIndex = 0;
         s2.play.paused = true;
+      } else if(currentTeamId){
+        const idx = p.findIndex(t => t.id === currentTeamId);
+        s2.play.currentTeamIndex = idx >= 0 ? idx : Math.min(s2.play.currentTeamIndex, p.length-1);
       } else {
         s2.play.currentTeamIndex = Math.min(s2.play.currentTeamIndex, p.length-1);
       }
@@ -1810,6 +1863,7 @@ function renderTeams(state, sess){
       save(st);
       renderGame();
     };
+
     card.appendChild(delTeam);
 
     const header=document.createElement("div");
@@ -1857,7 +1911,7 @@ function renderTeams(state, sess){
       del.className="cornerX";
       del.textContent="x";
       del.title="Remove member";
-      del.onclick=()=>{
+      del.onclick = ()=>{
         const st = ensureRootShape(load());
         const s2 = getActiveSession(st);
         if(!s2) return;
@@ -1865,18 +1919,34 @@ function renderTeams(state, sess){
         const t2 = s2.teams.find(t=>t.id===team.id);
         if(!t2) return;
 
-        t2.members = (t2.members||[]).filter(x=>x.id!==m.id);
+        const oldMembers = t2.members || [];
+        const currentId = s2.play.nextMemberIdByTeamId[team.id];
+        const oldIdx = oldMembers.findIndex(x => x.id === currentId);
 
-        const ptr = s2.play.nextMemberIndexByTeamId[team.id] ?? 0;
-        if(t2.members.length === 0){
-          s2.play.nextMemberIndexByTeamId[team.id] = 0;
+        // remove clicked member
+        t2.members = oldMembers.filter(x=>x.id!==m.id);
+
+        if (!t2.members.length) {
+          s2.play.nextMemberIdByTeamId[team.id] = undefined;
         } else {
-          s2.play.nextMemberIndexByTeamId[team.id] = ptr % t2.members.length;
+          let newIdx;
+
+          if (oldIdx < 0) {
+            newIdx = 0;
+          } else if (oldIdx >= t2.members.length) {
+            newIdx = 0; // wrapped past end
+          } else {
+            newIdx = oldIdx;
+          }
+
+          s2.play.nextMemberIdByTeamId[team.id] =
+            t2.members[newIdx].id;
         }
 
         save(st);
         renderGame();
       };
+
 
       row.appendChild(nm);
       row.appendChild(del);
@@ -1901,9 +1971,12 @@ function renderTeams(state, sess){
       if(!name) return;
 
       team.members.push({id:makeId("m"),name});
-      if(!(team.id in sess.play.nextMemberIndexByTeamId)){
-        sess.play.nextMemberIndexByTeamId[team.id] = 0;
+
+      const storedId = sess.play.nextMemberIdByTeamId[team.id];
+      if (!team.members.some(m => m.id === storedId)) {
+        sess.play.nextMemberIdByTeamId[team.id] = team.members[0]?.id;
       }
+
       save(state);
       renderGame();
       requestAnimationFrame(()=>{ qs(`input[data-team="${team.id}"]`)?.focus(); });
@@ -2028,8 +2101,10 @@ function initDisplayView(){
       let cti2 = Number(sess.play.currentTeamIndex || 0);
       cti2 = ((cti2 % playable2.length) + playable2.length) % playable2.length;
       const ct = playable2[cti2];
-      const mi2 = sess.play.nextMemberIndexByTeamId[ct.id] ?? 0;
-      const cm = ct.members?.length ? ct.members[mi2 % ct.members.length] : null;
+      const nextId = sess.play.nextMemberIdByTeamId[ct.id];
+      let idx = ct.members.findIndex(m => m.id === nextId);
+      if (idx < 0) idx = 0;
+      const cm = ct.members.length ? ct.members[idx] : null;
       qs("#dispCurrentUp").textContent = `Currently: ${ct.name} — ${cm?.name || "—"}`;
     } else {
       qs("#dispCurrentUp").textContent = "Currently: —";
@@ -2076,8 +2151,9 @@ function initDisplayView(){
       const list = ordered.length ? ordered : playable;
 
       for(const t of list){
-        const mi = sess.play.nextMemberIndexByTeamId[t.id] ?? 0;
-        const m = t.members?.length ? t.members[mi % t.members.length] : null;
+        const nmId = sess.play.nextMemberIdByTeamId[t.id];
+        const i = t.members.findIndex(m => m.id === nmId);
+        const m = t.members.length ? t.members[(i < 0 ? 0 : i) % t.members.length] : null;
 
         const row = document.createElement("div");
         row.className = "dispNextRow";
