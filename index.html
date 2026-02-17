@@ -471,6 +471,10 @@ td.wrapText{word-break:break-word}
   box-sizing:border-box;
 }
 
+.dispCategory {
+  position: relative;
+}
+
 .dispLabel{font-weight:950; font-size:22px; opacity:.85; letter-spacing:.5px;}
 .dispCategoryName{
   margin-top:10px;
@@ -569,16 +573,56 @@ td.wrapText{word-break:break-word}
 .dispResponses{
   flex:1;
   overflow:auto;
-  border-top:4px solid var(--line);
   padding-top:12px;
 }
+.dispTurnsLeft{
+  margin-top:10px;
+  font-size:26px;
+  font-weight:950;
+  opacity:.85;
+  position: absolute;
+  top: 10px;
+  right: 20px;
+}
+
+.dispBottomHead{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:12px;
+}
+
+.dispRespPageInfo{
+  font-size:22px;
+  font-weight:950;
+  opacity:.8;
+}
+
+.dispRespHeader{
+  display:grid;
+  gap:14px;
+  padding:10px 0 10px;
+  border-top:4px solid var(--line);
+  border-bottom:4px solid var(--line);
+  font-size:22px;
+  font-weight:950;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  opacity:.9;
+}
+
 .dispRespRow{
   display:grid;
-  grid-template-columns: 180px 240px 160px 1fr;
-  gap:14px;
-  padding:12px 0;
-  border-bottom:3px solid var(--line);
-  font-size:30px;
+  grid-template-columns: 220px 280px 200px 1fr;
+  gap:20px;
+  padding:16px 0;
+  font-size:40px;
+  font-weight:800;
+}
+
+.dispRespHeader,
+.dispRespRow{
+  grid-template-columns: 180px 240px 160px 2fr;
 }
 .dispRespRow:last-child{border-bottom:none}
 .dispRespRow .ref{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
@@ -780,6 +824,7 @@ td.wrapText{word-break:break-word}
           <div class="dispLabel">Current Category</div>
           <div class="dispCategoryName" id="dispCategory">—</div>
           <div class="dispCurrentUp" id="dispCurrentUp">—</div>
+          <div class="dispTurnsLeft" id="dispTurnsLeft">Turns left: —</div>
         </div>
 
         <div class="dispTimerBox" id="dispTimerBox">
@@ -801,7 +846,18 @@ td.wrapText{word-break:break-word}
       </div>
 
       <div class="dispBottom">
-        <div class="dispSectionTitle">Responses (selected category)</div>
+        <div class="dispBottomHead">
+          <div class="dispSectionTitle">Responses (selected category)</div>
+          <div class="dispRespPageInfo" id="dispRespPageInfo">Page — / —</div>
+        </div>
+
+        <div class="dispRespHeader">
+          <div>Team</div>
+          <div>Member</div>
+          <div>Ref</div>
+          <div>Response</div>
+        </div>
+
         <div class="dispResponses" id="dispResponses"></div>
       </div>
     </div>
@@ -1884,45 +1940,37 @@ function renderTeams(state, sess){
       del.className="cornerX";
       del.textContent="x";
       del.title="Remove member";
-      del.onclick = () => {
+      del.onclick = ()=>{
         const st = ensureRootShape(load());
         const s2 = getActiveSession(st);
-        if (!s2) return;
+        if(!s2) return;
 
-        const t2 = s2.teams.find(t => t.id === team.id);
-        if (!t2) return;
+        const t2 = s2.teams.find(t=>t.id===team.id);
+        if(!t2) return;
 
         const oldMembers = t2.members || [];
         const currentId = s2.play.nextMemberIdByTeamId[team.id];
-
-        // remove clicked member
-        t2.members = oldMembers.filter(x => x.id !== m.id);
-
-        // if team now empty, clear pointer
-        if (!t2.members.length) {
-          s2.play.nextMemberIdByTeamId[team.id] = undefined;
-          save(st);
-          renderGame();
-          return;
-        }
-
-        const currentStillExists = !!currentId && t2.members.some(x => x.id === currentId);
-
-        // IMPORTANT: if we removed someone else, keep the currentId exactly the same
-        if (currentStillExists && m.id !== currentId) {
-          save(st);
-          renderGame();
-          return;
-        }
-
-        // Otherwise, we removed the current person (or currentId was invalid) — choose a new one
         const oldIdx = oldMembers.findIndex(x => x.id === currentId);
 
-        // If we removed the current person, selecting `oldIdx` in the *new* array effectively advances to next
-        // If oldIdx is weird/missing, fall back to 0
-        let newIdx = (oldIdx >= 0) ? Math.min(oldIdx, t2.members.length - 1) : 0;
+        // remove clicked member
+        t2.members = oldMembers.filter(x=>x.id!==m.id);
 
-        s2.play.nextMemberIdByTeamId[team.id] = t2.members[newIdx].id;
+        if (!t2.members.length) {
+          s2.play.nextMemberIdByTeamId[team.id] = undefined;
+        } else {
+          let newIdx;
+
+          if (oldIdx < 0) {
+            newIdx = 0;
+          } else if (oldIdx >= t2.members.length) {
+            newIdx = 0; // wrapped past end
+          } else {
+            newIdx = oldIdx;
+          }
+
+          s2.play.nextMemberIdByTeamId[team.id] =
+            t2.members[newIdx].id;
+        }
 
         save(st);
         renderGame();
@@ -2090,6 +2138,29 @@ function initDisplayView(){
       qs("#dispCurrentUp").textContent = "Currently: —";
     }
 
+// turns left in current category before auto-rotate
+(() => {
+  const turnsPerCat = Number(sess.settings?.turnsPerCategory || 0);
+  const playableCount = info?.playable?.length || 0;
+  const activeCatId = sess.play.activeCategoryId;
+
+  let text = "Turns left: —";
+  if(turnsPerCat > 0 && activeCatId && playableCount > 0){
+    const total = turnsPerCat * playableCount;
+    const used = Number(sess.play.categoryTurnsUsed || 0);
+    const left = Math.max(0, total - used);
+    text = `Turns left: ${left} / ${total}`;
+  } else if(turnsPerCat > 0 && activeCatId){
+    text = "Turns left: —";
+  } else {
+    // turnsPerCategory == 0 means “no auto-rotate”
+    text = "Turns left: ∞";
+  }
+
+  const el = qs("#dispTurnsLeft");
+  if(el) el.textContent = text;
+})();
+
     // timer (compute remaining)
     let remaining = 0;
     if(sess.play.paused){
@@ -2163,6 +2234,20 @@ function initDisplayView(){
     }
     const pager = initDisplayView._respPager;
 
+function updateRespPageInfo(){
+  const el = qs("#dispRespPageInfo");
+  if(!el) return;
+
+  if(!sess.play.activeCategoryId){
+    el.textContent = "Page — / —";
+    return;
+  }
+
+  const cur = (pager.totalPages ? (pager.currentPage + 1) : 1);
+  const tot = (pager.totalPages || 1);
+  el.textContent = `Page ${cur} / ${tot}`;
+}
+
     function clearPager(){
       if(pager.pageTimer) clearInterval(pager.pageTimer);
       pager.pageTimer = null;
@@ -2173,6 +2258,7 @@ function initDisplayView(){
       pager.totalPages = 0;
       pager.allRows = [];
       pager.currentPage = 0;
+      updateRespPageInfo();
     }
 
     function buildSig(catId, list){
@@ -2184,6 +2270,8 @@ function initDisplayView(){
     }
 
     function showPage(pageIndex){
+      pager.currentPage = pageIndex;
+      updateRespPageInfo();
       const start = pageIndex * pager.rowsPerPage;
       const end = start + pager.rowsPerPage;
 
