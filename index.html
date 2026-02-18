@@ -1113,9 +1113,9 @@ renderSessions();
 
 /* ========= session creation (copies previous teams/members) ========= */
 qs("#btnCreate").onclick=()=>{
-  const state=ensureRootShape(load());
-  const date=qs("#sessionDate").value || today();
-  const title=qs("#sessionTitle").value || "Untitled";
+  const state = ensureRootShape(load());
+  const date = qs("#sessionDate").value || today();
+  const title = qs("#sessionTitle").value || "Untitled";
 
   const existing = [...state.sessions];
   existing.sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")) || String(b.id).localeCompare(String(a.id)));
@@ -1131,24 +1131,47 @@ qs("#btnCreate").onclick=()=>{
     };
   });
 
-  const nextMemberIdByTeamId = {};
-  for(const t of teams) {
-    nextMemberIdByTeamId[t.id] = t.members[0] ? t.members[0].id : undefined;
+  // --- ROTATE TEAM INDEX ---
+  let newCurrentTeamIndex = 0;
+  if (prev?.teams?.length) {
+    const playablePrev = prev.teams.filter(t => (t.members||[]).length > 0);
+    if (playablePrev.length > 0) {
+      const prevIndex = prev.play?.currentTeamIndex || 0;
+      newCurrentTeamIndex = (prevIndex + 1) % playablePrev.length;
+    }
   }
 
+  // --- ROTATE MEMBER POINTERS ---
+  const nextMemberIdByTeamId = {};
+  teams.forEach((team, i) => {
+    if (!team.members.length) return;
+
+    // Always rotate member pointer forward by one
+    const nextIndex = 1 % team.members.length;
+    nextMemberIdByTeamId[team.id] = team.members[nextIndex].id;
+  });
+
   state.sessions.push({
-    id:makeId("sess"),
+    id: makeId("sess"),
     date,
     title,
     teams,
-    categories:[],
+    categories: [],
     settings:{turnSeconds:30, refLabel:"Verse", turnsPerCategory:0},
-    play:{activeCategoryId:null,currentTeamIndex:0,nextMemberIdByTeamId,paused:true,categoryTurnsUsed:0,responses:[]}
+    play:{
+      activeCategoryId:null,
+      currentTeamIndex:newCurrentTeamIndex,
+      nextMemberIdByTeamId,
+      paused:true,
+      categoryTurnsUsed:0,
+      responses:[]
+    }
   });
 
   save(state);
   renderSessions();
 };
+
 qs("#btnReset").onclick=()=>{ qs("#sessionTitle").value=""; };
 
 qs("#btnToggleTimerCfg").onclick = () => {
