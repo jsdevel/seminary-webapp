@@ -1410,12 +1410,22 @@ qs("#btnAddTeam").onclick=()=>{
 qs("#btnAddCategory").onclick=()=>addCategoryFromInput();
 qs("#newCategoryName").addEventListener("keydown",(e)=>{ if(e.key==="Enter") addCategoryFromInput(); });
 qs("#btnOpenDisplay").onclick = () => {
-  const st = ensureRootShape(load());
-  if(!st.active) return;
+  const state = ensureRootShape(load());
+  const sess = getActiveSession(state);
+  if(!sess) return;
 
-  const url = `${location.pathname}?display=1&session=${encodeURIComponent(st.active)}`;
+  // Normalize anything that render logic might “fix” in-memory
+  ensureSessionShape(sess);
+  ensureActiveCategoryIsValid(sess);
+  getCurrentAndNext(sess); // normalizes currentTeamIndex internally
+
+  // IMPORTANT: persist those fixes so the popout reads the same truth
+  save(state);
+
+  const url = `${location.pathname}?display=1&session=${encodeURIComponent(state.active)}`;
   window.open(url, "seminary_display", "noopener,noreferrer,width=1400,height=900");
 };
+
 
 function addCategoryFromInput(){
   const input = qs("#newCategoryName");
