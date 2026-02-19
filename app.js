@@ -416,7 +416,7 @@ function printSessionReport(sessionId){
   for(const r of resp){
     const catName = catById.get(r.categoryId)?.name ?? "(Deleted category)";
     const teamName = teamById.get(r.teamId)?.name ?? "(Deleted team)";
-    const memberName = (teamById.get(r.teamId)?.members || []).find(m=>m.id===r.memberId)?.name ?? "(Deleted member)";
+    const memberName = ((teamById.get(r.teamId)?.members || []).find(m=>m.id===r.memberId)?.name || r.memberName) ?? "(Deleted member)";
 
     if(!catAgg.has(catName)) catAgg.set(catName, new Map());
     const tmap = catAgg.get(catName);
@@ -801,6 +801,7 @@ function submitResponse(awardPoint){
     categoryId: sess.play.activeCategoryId,
     teamId: currentTeam.id,
     memberId: currentMember.id,
+    memberName: currentMember.name,
     refLabel,
     refNumber,
     text
@@ -880,7 +881,7 @@ function renderResponsesTable(sess){
 
   for(const r of rows){
     const team = nameById(sess.teams, r.teamId) || "—";
-    const member = memberNameById(sess, r.teamId, r.memberId) || "—";
+    const member = memberNameById(sess, r.teamId, r.memberId) || r.memberName || "—";
     const ref = `${r.refNumber||""}`.trim();
 
     const tr = document.createElement("tr");
@@ -1114,33 +1115,27 @@ function renderTeams(state, sess){
         const t2 = s2.teams.find(t=>t.id===team.id);
         if(!t2) return;
 
-        const oldMembers = t2.members || [];
         const currentId = s2.play.nextMemberIdByTeamId[team.id];
-        const oldIdx = oldMembers.findIndex(x => x.id === currentId);
 
         // remove clicked member
-        t2.members = oldMembers.filter(x=>x.id!==m.id);
+        t2.members = (t2.members || []).filter(x => x.id !== m.id);
 
         if (!t2.members.length) {
           s2.play.nextMemberIdByTeamId[team.id] = undefined;
         } else {
-          let newIdx;
-
-          if (oldIdx < 0) {
-            newIdx = 0;
-          } else if (oldIdx >= t2.members.length) {
-            newIdx = 0; // wrapped past end
+          // 🔥 preserve current person if still exists
+          if (t2.members.some(x => x.id === currentId)) {
+            s2.play.nextMemberIdByTeamId[team.id] = currentId;
           } else {
-            newIdx = oldIdx;
+            // current person was deleted — fallback safely
+            s2.play.nextMemberIdByTeamId[team.id] = t2.members[0].id;
           }
-
-          s2.play.nextMemberIdByTeamId[team.id] =
-            t2.members[newIdx].id;
         }
 
         save(st);
         renderGame();
       };
+
 
 
       row.appendChild(nm);
@@ -1431,7 +1426,7 @@ function updateRespPageInfo(){
       // stable signature so the pager doesn't reset every second
       // (include enough fields to catch real changes)
       return (catId||"") + "|" + list.length + "|" + list.map(r=>[
-        r.teamId||"", r.memberId||"", (r.refNumber||""), (r.text||"")
+        r.teamId||"", r.memberId||r.memberName||"", (r.refNumber||""), (r.text||"")
       ].join("§")).join("¶");
     }
 
@@ -1476,7 +1471,7 @@ function updateRespPageInfo(){
         // build all row elements
         pager.allRows = rows.map(r=>{
           const team = nameById(sess.teams, r.teamId) || "—";
-          const member = memberNameById(sess, r.teamId, r.memberId) || "—";
+          const member = memberNameById(sess, r.teamId, r.memberId) || r.memberName || "—";
           const ref = `${r.refNumber||""}`.trim();
 
           const div = document.createElement("div");
