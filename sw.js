@@ -1,5 +1,7 @@
-const CACHE_NAME = "seminary-v1";
+// sw.js
+const CACHE_NAME = "seminary-v5"; // bump this on deploy
 const APP_SHELL = "./index.html";
+
 const ASSETS = [
   "./index.html",
   "./app.css",
@@ -11,34 +13,53 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(ASSETS)));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(ASSETS);
+  })());
+
+  // Activate the new SW ASAP
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    // Take control of existing clients immediately
+    await self.clients.claim();
+
+    // Delete old cache versions so bumps actually take effect
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        .filter((k) => k !== CACHE_NAME)
+        .map((k) => caches.delete(k))
+    );
+  })());
 });
 
-// IMPORTANT: handle navigation (page loads) specially
 self.addEventListener("fetch", (event) => {
   const req = event.request;
+  const url = new URL(req.url);
 
-  // If user is navigating to a page (including query params), serve app shell
+  // Only handle same-origin requests
+  if (url.origin !== self.location.origin) return;
+
+  // 1) Navigations (page loads): network-first, fallback to cached app shell
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
 
-      // Always try network first when online; fall back to cached index.html offline
       try {
+        // Try to get the newest HTML when online
         const fresh = await fetch(req);
-        // optionally keep cache warm
+        // Keep the shell warm
         cache.put(APP_SHELL, fresh.clone());
         return fresh;
       } catch {
-        // KEY: ignoreSearch lets index.html match even if URL has ?display=...
+        // Important for query params like ?view=display
         const cachedShell =
-          await cache.match(APP_SHELL) ||
-          await cache.match(APP_SHELL, { ignoreSearch: true });
+          (await cache.match(APP_SHELL, { ignoreSearch: true })) ||
+          (await cache.match(APP_SHELL));
 
         return cachedShell || new Response("Offline", { status: 503 });
       }
@@ -46,8 +67,33 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // For other assets: cache-first is fine
-  event.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req))
-  );
+  // 2) Scripts / styles: network-first so changes show up without hard refresh
+  if (req.destination === "script" || req.destination === "style") {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+
+      try {
+        // Ask the browser to not serve from its own HTTP cache
+        const fresh = await fetch(req, { cache: "no-store" });
+        cache.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        const cached = await cache.match(req);
+        return cached || Response.error();
+      }
+    })());
+    return;
+  }
+
+  // 3) Everything else: cache-first (fast + offline friendly)
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+
+    const cached = await cache.match(req);
+    if (cached) return cached;
+
+    const fresh = await fetch(req);
+    cache.put(req, fresh.clone());
+    return fresh;
+  })());
 });

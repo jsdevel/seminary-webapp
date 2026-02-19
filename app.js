@@ -566,7 +566,7 @@ qs("#btnOpenDisplay").onclick = () => {
   // IMPORTANT: persist those fixes so the popout reads the same truth
   save(state);
 
-  const url = `${location.pathname}?display=1&session=${encodeURIComponent(state.active)}`;
+  const url = `${location.pathname}?display=1&session=${encodeURIComponent(state.active)}&v=${Date.now()}`;
   window.open(url, "seminary_display", "noopener,noreferrer,width=1400,height=900");
 };
 
@@ -1544,6 +1544,16 @@ function updateRespPageInfo(){
 if(isDisplayMode()){
   initDisplayView();
 }
+
+window.addEventListener("load", () => {
+  const params = new URLSearchParams(location.search);
+  const view = params.get("display");
+
+  document.title =
+    view === "1"
+      ? "Seminary Game Screen"
+      : "Seminary Dashboard";
+});
 
 if(!isDisplayMode()){
   /* reopen active on refresh */
